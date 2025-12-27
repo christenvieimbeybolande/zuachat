@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import '../api/client.dart';
 import '../widgets/zua_loader.dart';
 
@@ -17,7 +16,8 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
   List<dynamic> _sessions = [];
   String? _currentSessionId;
 
-  static const primary = Color(0xFF1877F2);
+  // 🔴 Couleur officielle ZuaChat
+  static const Color primary = Color(0xFFFF0000);
 
   @override
   void initState() {
@@ -96,87 +96,43 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
   }
 
   // ============================================================
-  // Confirmation + Loader
+  // Helpers affichage
   // ============================================================
 
-  Future<void> _confirmAction({
-    required BuildContext context,
-    required Map<String, dynamic> session,
-    required String actionLabel,
-    required Future<void> Function() onConfirm,
-  }) async {
-    final isCurrent = session["is_current"] == true;
+  String _deviceName(String ua) {
+    final l = ua.toLowerCase();
 
-    final icon =
-        actionLabel == "Supprimer" ? Icons.delete_forever : Icons.logout;
+    if (l.contains('dart')) return 'Dernière connexion';
+    if (l.contains('android')) return 'Appareil Android';
+    if (l.contains('iphone')) return 'iPhone';
+    if (l.contains('ipad')) return 'iPad';
+    if (l.contains('ios')) return 'Appareil iOS';
+    if (l.contains('windows')) return 'Ordinateur Windows';
+    if (l.contains('mac')) return 'Mac';
+    if (l.contains('linux')) return 'Ordinateur Linux';
 
-    final color = actionLabel == "Supprimer" ? Colors.red : Colors.orange;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 8),
-            Text("$actionLabel la session", style: TextStyle(color: color)),
-          ],
-        ),
-        content: Text(
-          isCurrent
-              ? "Vous êtes sur le point d'agir sur la session ACTUELLE.\n\nVous serez automatiquement déconnecté si vous continuez."
-              : "Êtes-vous sûr de vouloir $actionLabel cette session ?",
-          style: const TextStyle(fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: color),
-            child: Text(actionLabel),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    await onConfirm();
-
-    Navigator.of(context).pop(); // Fermer loader
+    return 'Appareil inconnu';
   }
 
-  // ============================================================
-  // Icône plateforme
-  // ============================================================
+  Icon _platformIcon(String ua) {
+    final l = ua.toLowerCase();
 
-  Widget _platformIcon(String ua) {
-    final userAgent = ua.toLowerCase();
-
-    if (userAgent.contains("android")) {
+    if (l.contains('dart')) {
+      return const Icon(Icons.access_time, color: Colors.grey);
+    }
+    if (l.contains('android')) {
       return const Icon(Icons.android, color: Colors.green);
     }
-    if (userAgent.contains("iphone") ||
-        userAgent.contains("ios") ||
-        userAgent.contains("ipad")) {
+    if (l.contains('iphone') || l.contains('ipad') || l.contains('ios')) {
       return const Icon(Icons.phone_iphone, color: Colors.blue);
     }
-    if (userAgent.contains("windows")) {
+    if (l.contains('windows')) {
       return const Icon(Icons.laptop_windows, color: Colors.blueGrey);
     }
-    if (userAgent.contains("mac") || userAgent.contains("os x")) {
+    if (l.contains('mac')) {
       return const Icon(Icons.laptop_mac, color: Colors.black);
     }
-    if (userAgent.contains("linux")) {
+    if (l.contains('linux')) {
       return const Icon(Icons.laptop, color: Colors.orange);
     }
 
@@ -193,14 +149,19 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
 
     if (_loading) {
       return const Scaffold(
-        body: Center(child: ZuaLoader(size: 130, looping: true)),
+        body: Center(child: ZuaLoader(size: 120, looping: true)),
       );
     }
 
     if (_error) {
       return Scaffold(
         appBar: AppBar(
-            backgroundColor: primary, title: const Text("Appareils connectés")),
+          backgroundColor: primary,
+          title: const Text(
+            "Appareils connectés",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -221,7 +182,11 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: primary,
-        title: const Text("Appareils connectés"),
+        elevation: 0,
+        title: const Text(
+          "Appareils connectés",
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
         actions: [
           TextButton(
             onPressed: () async {
@@ -232,7 +197,8 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
                 builder: (_) => AlertDialog(
                   title: const Text("Déconnecter les autres sessions"),
                   content: const Text(
-                      "Cette action conservera uniquement votre session actuelle.\n\nContinuer ?"),
+                    "Seule la session actuelle sera conservée.\n\nContinuer ?",
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
@@ -253,14 +219,17 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
               if (ok) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text(
-                          "Toutes les autres sessions ont été déconnectées.")),
+                    content: Text(
+                        "Toutes les autres sessions ont été déconnectées."),
+                  ),
                 );
                 _loadSessions();
               }
             },
-            child: const Text("Déconnecter autres",
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Déconnecter autres",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -279,9 +248,9 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
                     ? Colors.red.shade50
                     : (isDark ? const Color(0xFF242526) : Colors.white),
             margin: const EdgeInsets.symmetric(vertical: 8),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -289,11 +258,11 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
                 children: [
                   Row(
                     children: [
-                      _platformIcon(s["user_agent"]),
+                      _platformIcon(s["user_agent"] ?? ""),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          s["user_agent"],
+                          _deviceName(s["user_agent"] ?? ""),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
@@ -305,80 +274,14 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "Créée : ${s["created_at"]}\nDernière activité : ${s["last_activity"]}",
+                    "Dernière connexion : ${s["last_activity"]}",
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? Colors.grey[300] : Colors.red,
+                      color: isDark ? Colors.grey[400] : Colors.grey[700],
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _status(isCurrent, revoked),
-                  const SizedBox(height: 12),
-                  if (!isCurrent)
-                    Row(
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => _confirmAction(
-                            context: context,
-                            session: s,
-                            actionLabel: "Déconnecter",
-                            onConfirm: () async {
-                              final ok = await revokeSession(s["session_id"]);
-                              if (ok) _loadSessions();
-                            },
-                          ),
-                          icon: const Icon(Icons.logout),
-                          label: const Text("Déconnecter"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
-                          onPressed: () => _confirmAction(
-                            context: context,
-                            session: s,
-                            actionLabel: "Supprimer",
-                            onConfirm: () async {
-                              final result =
-                                  await deleteSession(s["session_id"]);
-
-                              if (result["success"] == true) {
-                                // Si c'était la session actuelle
-                                if (result["logout_required"] == true) {
-                                  await ApiClient.logoutLocal();
-
-                                  if (!mounted) return;
-
-                                  // 🔥 Fermer le loader AVANT la navigation
-                                  Navigator.of(context).pop();
-
-                                  // 🔥 Navigation propre après fermeture du dialog
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    Navigator.of(context)
-                                        .pushNamedAndRemoveUntil(
-                                      '/login',
-                                      (route) => false,
-                                    );
-                                  });
-
-                                  return;
-                                }
-
-                                // Sinon continuer normalement
-                                _loadSessions();
-                              }
-                            },
-                          ),
-                          icon: const Icon(Icons.delete_forever),
-                          label: const Text("Supprimer"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),
@@ -390,14 +293,20 @@ class _ConnectedDevicesPageState extends State<ConnectedDevicesPage> {
 
   Widget _status(bool isCurrent, bool revoked) {
     if (isCurrent) {
-      return const Text("Session actuelle",
-          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold));
+      return const Text(
+        "Session actuelle",
+        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+      );
     }
     if (revoked) {
-      return const Text("Révoquée",
-          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold));
+      return const Text(
+        "Révoquée",
+        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+      );
     }
-    return const Text("Active",
-        style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold));
+    return const Text(
+      "Active",
+      style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+    );
   }
 }
