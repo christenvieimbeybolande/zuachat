@@ -1,0 +1,87 @@
+// ===============================
+// 🔌 PLUGINS (DOIT ÊTRE EN PREMIER)
+// ===============================
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// ===============================
+// 🔐 SIGNATURE RELEASE
+// ===============================
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+// ===============================
+// 🤖 ANDROID CONFIG
+// ===============================
+android {
+    namespace "com.cimstudiodev.zuachat"
+
+    compileSdk 35
+    ndkVersion "29.0.13113456"
+
+    defaultConfig {
+        applicationId "com.cimstudiodev.zuachat"
+        minSdk 21
+        targetSdk 35
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+        multiDexEnabled true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    // ===============================
+    // 🔐 SIGNING CONFIGS
+    // ===============================
+    signingConfigs {
+        release {
+            storeFile file(keystoreProperties["storeFile"])
+            storePassword keystoreProperties["storePassword"]
+            keyAlias keystoreProperties["keyAlias"]
+            keyPassword keystoreProperties["keyPassword"]
+        }
+    }
+
+    // ===============================
+    // 🏗️ BUILD TYPES
+    // ===============================
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    // ===============================
+    // 📦 PACKAGING
+    // ===============================
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+// ===============================
+// 🐦 FLUTTER
+// ===============================
+flutter {
+    source "../.."
+}
