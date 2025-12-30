@@ -6,11 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:vibration/vibration.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
+import '../api/send_audio_message.dart'; // ✅ AJOUT
 import '../api/delete_chat_message.dart';
-import '../api/send_audio_message.dart';
 import '../pages/user_profile.dart';
 
 class ChatPage extends StatefulWidget {
@@ -37,21 +38,19 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
 
+  // ===================== AUDIO (AJOUT SANS CASSE) =====================
+  final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _player = AudioPlayer();
+  Timer? _recordTimer;
+  Duration _recordDuration = Duration.zero;
+  bool _recording = false;
+
   bool _loading = true;
   bool _sending = false;
   bool _error = false;
 
   List<Map<String, dynamic>> _messages = [];
   DateTime? _lastLoadAt;
-
-  // ================= AUDIO (AJOUT PROPRE) =================
-  final AudioRecorder _recorder = AudioRecorder();
-
-  bool _recording = false;
-  bool _locked = false;
-  Duration _recordDuration = Duration.zero;
-  Timer? _recordTimer;
-  File? _audioFile;
 
   @override
   void initState() {
@@ -64,6 +63,7 @@ class _ChatPageState extends State<ChatPage> {
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     _recordTimer?.cancel();
+    _player.dispose();
     super.dispose();
   }
 
@@ -115,7 +115,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================================================
-  // ✉️ Envoyer message texte (INCHANGÉ)
+  // ✉️ Envoyer message TEXTE (INCHANGÉ)
   // ============================================================
   Future<void> _send() async {
     final text = _msgCtrl.text.trim();
@@ -139,22 +139,17 @@ class _ChatPageState extends State<ChatPage> {
   bool _isMe(int senderId) => senderId != widget.contactId;
 
   // ============================================================
-  // 🎙️ AUDIO – START
+  // 🎙️ AUDIO — START (AJOUT)
   // ============================================================
   Future<void> _startRecording() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) return;
+    if (!await _recorder.hasPermission()) return;
 
     final dir = await getTemporaryDirectory();
     final path =
         '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
     await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
-        sampleRate: 44100,
-      ),
+      const RecordConfig(encoder: AudioEncoder.aacLc),
       path: path,
     );
 
@@ -162,57 +157,37 @@ class _ChatPageState extends State<ChatPage> {
       Vibration.vibrate(duration: 40);
     }
 
-    _audioFile = File(path);
     _recordDuration = Duration.zero;
-
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() {
-        _recordDuration += const Duration(seconds: 1);
-      });
+      setState(() => _recordDuration += const Duration(seconds: 1));
     });
 
     setState(() => _recording = true);
   }
 
   // ============================================================
-  // 🎙️ AUDIO – STOP & SEND
+  // 🎙️ AUDIO — STOP & SEND (AJOUT)
   // ============================================================
   Future<void> _stopAndSendAudio() async {
     _recordTimer?.cancel();
-
     final path = await _recorder.stop();
     if (path == null) return;
 
     final file = File(path);
+    if (!file.existsSync() || _recordDuration.inSeconds == 0) return;
 
-    if (file.existsSync() && _recordDuration.inSeconds > 0) {
-      await apiSendAudioMessage(
-        receiverId: widget.contactId,
-        audioFile: file,
-        duration: _recordDuration.inSeconds,
-      );
-    }
+    await apiSendAudioMessage(
+      receiverId: widget.contactId,
+      audioFile: file,
+      duration: _recordDuration.inSeconds,
+    );
 
     setState(() {
       _recording = false;
-      _locked = false;
-      _audioFile = null;
       _recordDuration = Duration.zero;
     });
 
     _load(scrollToEnd: true);
-  }
-
-  void _cancelRecording() async {
-    _recordTimer?.cancel();
-    await _recorder.stop();
-
-    setState(() {
-      _recording = false;
-      _locked = false;
-      _audioFile = null;
-      _recordDuration = Duration.zero;
-    });
   }
 
   // ============================================================
@@ -246,7 +221,7 @@ class _ChatPageState extends State<ChatPage> {
                 _load();
               },
             ),
-            if (_isMe(int.parse("${msg['sender_id']}")))
+            if (isMe)
               ListTile(
                 leading: const Icon(Icons.delete_forever),
                 title: const Text("Supprimer pour tout le monde"),
@@ -263,28 +238,27 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================================================
-  // 💬 Bulle message (texte inchangé)
+  // 💬 BULLE (TEXTE + AUDIO)
   // ============================================================
   Widget _bubble(Map m) {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
+    final type = m['type'] ?? 'text';
+
+    if (type == 'audio' && !deleted) {
+      return _audioBubble(m, isMe);
+    }
 
     final text = deleted ? "Message supprimé" : (m["message"] ?? "");
     final time = m["time"] ?? "";
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onLongPress: deleted ? null : () => _openOptions(m, isMe),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
-          margin: EdgeInsets.fromLTRB(
-            isMe ? 40 : 8,
-            4,
-            isMe ? 8 : 40,
-            4,
-          ),
+          margin:
+              EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: deleted
@@ -305,21 +279,49 @@ class _ChatPageState extends State<ChatPage> {
                       ? Colors.white
                       : isMe
                           ? Colors.white
-                          : Theme.of(context).textTheme.bodyMedium?.color,
+                          : Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 time,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isMe
-                      ? Colors.white70
-                      : (isDark ? Colors.white54 : Colors.black45),
-                ),
+                style: const TextStyle(fontSize: 10, color: Colors.white70),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _audioBubble(Map m, bool isMe) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin:
+            EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isMe ? primary : Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.play_arrow, color: Colors.white),
+              onPressed: () async {
+                await _player.play(UrlSource(m['audio_path']));
+              },
+            ),
+            Text(
+              "${m['audio_duration']}s",
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
         ),
       ),
     );
@@ -333,68 +335,38 @@ class _ChatPageState extends State<ChatPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         color: Theme.of(context).cardColor,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            if (_locked)
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: _cancelRecording,
+            Expanded(
+              child: TextField(
+                controller: _msgCtrl,
+                minLines: 1,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: "Votre message...",
+                  filled: true,
+                  fillColor: Theme.of(context).scaffoldBackgroundColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
                   ),
-                  Text(
-                    "${_recordDuration.inMinutes.toString().padLeft(2, '0')}:"
-                    "${(_recordDuration.inSeconds % 60).toString().padLeft(2, '0')}",
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: Colors.green),
-                    onPressed: _stopAndSendAudio,
-                  ),
-                ],
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
               ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _msgCtrl,
-                    minLines: 1,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: "Votre message...",
-                      filled: true,
-                      fillColor: Theme.of(context).scaffoldBackgroundColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onLongPress: _startRecording,
+              onLongPressEnd: (_) {
+                if (_recording) _stopAndSendAudio();
+              },
+              child: CircleAvatar(
+                backgroundColor: primary,
+                child: Icon(
+                  _recording ? Icons.mic : Icons.send,
+                  color: Colors.white,
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onLongPressStart: (_) => _startRecording(),
-                  onLongPressEnd: (_) {
-                    if (!_locked) _stopAndSendAudio();
-                  },
-                  onVerticalDragUpdate: (d) {
-                    if (d.delta.dy < -8) {
-                      setState(() => _locked = true);
-                    }
-                  },
-                  child: CircleAvatar(
-                    backgroundColor: primary,
-                    child: Icon(
-                      _recording ? Icons.mic : Icons.send,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -413,31 +385,31 @@ class _ChatPageState extends State<ChatPage> {
         backgroundColor: primary,
         titleSpacing: 0,
         title: _buildHeader(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () => _load(scrollToEnd: false),
+          ),
+        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: Builder(
-              builder: (_) {
-                if (_loading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (_error) {
-                  return Center(
-                    child: ElevatedButton(
-                      onPressed: () => _load(initial: true),
-                      child: const Text("Réessayer"),
-                    ),
-                  );
-                }
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.all(10),
-                  itemCount: _messages.length,
-                  itemBuilder: (_, i) => _bubble(_messages[i]),
-                );
-              },
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error
+                    ? Center(
+                        child: ElevatedButton(
+                          onPressed: () => _load(initial: true),
+                          child: const Text("Réessayer"),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollCtrl,
+                        padding: const EdgeInsets.all(10),
+                        itemCount: _messages.length,
+                        itemBuilder: (_, i) => _bubble(_messages[i]),
+                      ),
           ),
           _inputField(),
         ],
