@@ -1,9 +1,18 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:vibration/vibration.dart';
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
+import '../api/send_audio_message.dart';
 import '../api/delete_chat_message.dart';
+
+import '../widgets/chat_audio_bubble.dart';
 import '../pages/user_profile.dart';
 
 class ChatPage extends StatefulWidget {
@@ -29,6 +38,19 @@ class _ChatPageState extends State<ChatPage> {
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  // =========================
+  // 🎙️ AUDIO STATE
+  // =========================
+  final AudioRecorder _recorder = AudioRecorder();
+
+  bool _isRecording = false;
+  bool _isLocked = false;
+  bool _isPaused = false;
+
+  Duration _recordDuration = Duration.zero;
+  Timer? _recordTimer;
+
+  String? _recordPath;
 
   bool _loading = true;
   bool _sending = false;
@@ -45,6 +67,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _recordTimer?.cancel();
+    _recorder.dispose(); // ✅ OBLIGATOIRE avec AudioRecorder
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -119,6 +143,86 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  // ============================================================
+  // 🎙️ AUDIO - START RECORDING
+  // ============================================================
+  Future<void> _startRecording() async {
+    final hasPerm = await _recorder.hasPermission();
+    if (!hasPerm) return;
+
+    final dir = await getTemporaryDirectory();
+    _recordPath =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      ),
+      path: _recordPath!,
+    );
+
+    _recordDuration = Duration.zero;
+    _recordTimer?.cancel();
+    _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _recordDuration += const Duration(seconds: 1);
+      });
+    });
+
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(duration: 40);
+    }
+
+    setState(() {
+      _isRecording = true;
+      _isPaused = false;
+    });
+  }
+
+  // ============================================================
+  // ⏹️ AUDIO - STOP / SEND
+  // ============================================================
+  Future<void> _stopRecording({bool send = true}) async {
+    _recordTimer?.cancel();
+    final path = await _recorder.stop();
+    if (path != null) {
+      _recordPath = path;
+    }
+
+    if (send && _recordPath != null) {
+      await apiSendAudioMessage(
+        receiverId: widget.contactId,
+        filePath: _recordPath!,
+        duration: _recordDuration.inSeconds,
+      );
+      await _load(scrollToEnd: true);
+    }
+
+    setState(() {
+      _isRecording = false;
+      _isLocked = false;
+      _isPaused = false;
+      _recordDuration = Duration.zero;
+    });
+  }
+
+  // ============================================================
+  // ❌ AUDIO - CANCEL
+  // ============================================================
+  void _cancelRecording() async {
+    _recordTimer?.cancel();
+    await _recorder.stop();
+    _recordPath = null;
+
+    setState(() {
+      _isRecording = false;
+      _isLocked = false;
+      _isPaused = false;
+    });
+  }
+
   bool _isMe(int senderId) => senderId != widget.contactId;
 
   // ============================================================
@@ -175,7 +279,18 @@ class _ChatPageState extends State<ChatPage> {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
 
+    // 🔊 MESSAGE AUDIO
+    if (m['type'] == 'audio' && !deleted) {
+      return ChatAudioBubble(
+        isMe: isMe,
+        url: m['audio_path'],
+        duration: int.tryParse('${m['audio_duration']}') ?? 0,
+        time: m['time'] ?? '',
+      );
+    }
+
     final text = deleted ? "Message supprimé" : (m["message"] ?? "");
+
     final time = m["time"] ?? "";
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -288,6 +403,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
+          _recordingOverlay(),
           Expanded(
             child: Builder(
               builder: (_) {
@@ -312,6 +428,52 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
           _inputField(),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // 🎙️ OVERLAY RECORDING
+  // ============================================================
+  Widget _recordingOverlay() {
+    if (!_isRecording) return const SizedBox.shrink();
+
+    return Container(
+      color: Colors.black87,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: _cancelRecording,
+          ),
+          Text(
+            '${_recordDuration.inMinutes}:${(_recordDuration.inSeconds % 60).toString().padLeft(2, '0')}',
+            style: const TextStyle(color: Colors.white),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: Icon(
+              _isPaused ? Icons.play_arrow : Icons.pause,
+              color: Colors.white,
+            ),
+            onPressed: () async {
+              if (!_isRecording) return;
+
+              if (_isPaused) {
+                await _recorder.resume();
+              } else {
+                await _recorder.pause();
+              }
+
+              setState(() => _isPaused = !_isPaused);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.green),
+            onPressed: () => _stopRecording(send: true),
+          ),
         ],
       ),
     );
@@ -347,15 +509,29 @@ class _ChatPageState extends State<ChatPage> {
             const SizedBox(width: 8),
             CircleAvatar(
               backgroundColor: primary,
-              child: IconButton(
-                icon: _sending
+              child: GestureDetector(
+                onTap: _msgCtrl.text.trim().isNotEmpty
+                    ? (_sending ? null : _send)
+                    : null,
+                onLongPress:
+                    _msgCtrl.text.trim().isEmpty ? _startRecording : null,
+                onLongPressEnd: _msgCtrl.text.trim().isEmpty
+                    ? (_) {
+                        if (!_isLocked) {
+                          _stopRecording(send: true);
+                        }
+                      }
+                    : null,
+                child: _sending
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(color: Colors.white),
                       )
-                    : const Icon(Icons.send, color: Colors.white),
-                onPressed: _sending ? null : _send,
+                    : Icon(
+                        _msgCtrl.text.trim().isEmpty ? Icons.mic : Icons.send,
+                        color: Colors.white,
+                      ),
               ),
             ),
           ],

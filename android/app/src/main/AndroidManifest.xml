@@ -11,6 +11,8 @@
 
     <!-- 🎥 Vidéos (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <!-- 🖼️ Images/Vidéos (Android 12 et moins) -->
     <uses-permission
