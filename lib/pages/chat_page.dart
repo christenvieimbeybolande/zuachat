@@ -288,16 +288,17 @@ class _ChatPageState extends State<ChatPage> {
     if (m['type'] == 'audio' && !deleted) {
       return ChatAudioBubble(
         isMe: isMe,
-        url: 'https://zuachat.com/${m['audio_path']}',
+        url: m['audio_path'].toString().startsWith('http')
+            ? m['audio_path']
+            : 'https://zuachat.com/${m['audio_path']}',
         duration: int.tryParse('${m['audio_duration']}') ?? 0,
         time: m['time'] ?? '',
       );
     }
 
+    // 📝 MESSAGE TEXTE
     final text = deleted ? "Message supprimé" : (m["message"] ?? "");
-
     final time = m["time"] ?? "";
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
