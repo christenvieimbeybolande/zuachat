@@ -2,7 +2,7 @@ name: zuachat
 description: Application Flutter ZuaChat
 publish_to: "none"
 
-version: 1.3.0+3
+version: 1.2.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -16,52 +16,41 @@ dependencies:
     sdk: flutter
   intl: ^0.20.2
 
-  # 🌐 Réseau & stockage
   dio: ^5.4.0
   shared_preferences: ^2.5.3
-
-  # 🖼️ Médias & UI
   cached_network_image: ^3.3.1
   image_picker: ^1.2.0
   file_picker: ^8.0.0
+  fluttertoast: ^8.2.4
+  url_launcher: ^6.3.0
+  audioplayers: ^6.5.1
+  vibration: ^3.1.4
   image_gallery_saver_plus: ^4.0.1
   shimmer: ^3.0.0
   fl_chart: ^0.68.0
-  provider: ^6.0.5
-
-  # 🔔 UX
-  fluttertoast: ^8.2.4
-  vibration: ^3.1.4
-  url_launcher: ^6.3.0
-
-  # 🎧 AUDIO / VIDÉO
-  audioplayers: ^6.5.1
-  record: ^6.1.2           # ⚠️ version FIXE (important)
-  path_provider: ^2.1.4
-  video_player: ^2.10.1
   video_compress: ^3.1.2
-  video_thumbnail: ^0.5.6
+  video_player: ^2.10.1
   wakelock_plus: ^1.4.0
+  video_thumbnail: ^0.5.6
+  provider: ^6.0.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.13.1
 
-
 flutter:
   uses-material-design: true
   generate: true
-
   assets:
     - assets/logo.png
-    - assets/logo2.png
-    - assets/default-avatar.png
     - assets/categories.json
     - assets/pays.json
     - assets/sounds/beep.mp3
     - assets/sounds/pop.mp3
     - assets/sounds/like.mp3
+    - assets/default-avatar.png
+    - assets/logo2.png
 
 flutter_launcher_icons:
   android: true

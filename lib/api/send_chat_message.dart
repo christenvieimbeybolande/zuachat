@@ -1,26 +1,29 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'client.dart';
 
-Future<void> apiSendMessage({
+Future<void> apiSendChatMessage({
   required int receiverId,
-  String? message,
-  File? audioFile,
-  int? duration,
+  required String message,
 }) async {
   final dio = await ApiClient.authed();
 
-  final form = FormData.fromMap({
-    'receiver_id': receiverId.toString(),
-    if (message != null) 'message': message,
-    if (duration != null) 'duration': duration.toString(),
-    if (audioFile != null)
-      'audio': await MultipartFile.fromFile(audioFile.path),
-  });
+  final Response res = await dio.post(
+    '/send_message_api.php',
+    data: jsonEncode({
+      'receiver_id': receiverId,
+      'message': message,
+    }),
+    options: Options(
+      headers: {'Content-Type': 'application/json'},
+    ),
+  );
 
-  final res = await dio.post('/send_message_api.php', data: form);
-
-  if (res.data is! Map || res.data['ok'] != true) {
-    throw Exception(res.data['error'] ?? 'Échec envoi message');
+  final body = res.data;
+  if (body is! Map || body['ok'] != true) {
+    final msg = body is Map && body['error'] != null
+        ? body['error'].toString()
+        : "Erreur lors de l'envoi";
+    throw Exception(msg);
   }
 }
