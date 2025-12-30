@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 class ChatAudioBubble extends StatefulWidget {
   final bool isMe;
@@ -25,7 +29,11 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
   Duration _position = Duration.zero;
   Duration _total = Duration.zero;
+
   bool _playing = false;
+  bool _downloading = false;
+
+  File? _localFile;
 
   StreamSubscription? _posSub;
   StreamSubscription? _durSub;
@@ -35,17 +43,34 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   void initState() {
     super.initState();
 
+    _initCache();
+
     _durSub = _player.onDurationChanged.listen((d) {
-      setState(() => _total = d);
+      if (mounted) setState(() => _total = d);
     });
 
     _posSub = _player.onPositionChanged.listen((p) {
-      setState(() => _position = p);
+      if (mounted) setState(() => _position = p);
     });
 
     _stateSub = _player.onPlayerStateChanged.listen((s) {
-      setState(() => _playing = s == PlayerState.playing);
+      if (mounted) setState(() => _playing = s == PlayerState.playing);
     });
+  }
+
+  Future<void> _initCache() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final audioDir = Directory('${dir.path}/chat_audios');
+    if (!audioDir.existsSync()) {
+      audioDir.createSync(recursive: true);
+    }
+
+    final name = widget.url.split('/').last;
+    final file = File('${audioDir.path}/$name');
+
+    if (file.existsSync()) {
+      _localFile = file;
+    }
   }
 
   @override
@@ -61,8 +86,47 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   Future<void> _toggle() async {
     if (_playing) {
       await _player.pause();
-    } else {
-      await _player.play(UrlSource(widget.url));
+      return;
+    }
+
+    // 🔥 si déjà en cache → lecture locale
+    if (_localFile != null && _localFile!.existsSync()) {
+      await _player.play(DeviceFileSource(_localFile!.path));
+      return;
+    }
+
+    // ⬇️ sinon télécharger
+    await _downloadAndPlay();
+  }
+
+  Future<void> _downloadAndPlay() async {
+    if (_downloading) return;
+
+    setState(() => _downloading = true);
+
+    try {
+      final response = await http.get(Uri.parse(widget.url));
+      if (response.statusCode != 200) {
+        throw Exception('Download failed');
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final audioDir = Directory('${dir.path}/chat_audios');
+      if (!audioDir.existsSync()) {
+        audioDir.createSync(recursive: true);
+      }
+
+      final name = widget.url.split('/').last;
+      final file = File('${audioDir.path}/$name');
+      await file.writeAsBytes(response.bodyBytes);
+
+      _localFile = file;
+
+      await _player.play(DeviceFileSource(file.path));
+    } catch (_) {
+      // silencieux
+    } finally {
+      if (mounted) setState(() => _downloading = false);
     }
   }
 
@@ -74,6 +138,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
   @override
   Widget build(BuildContext context) {
+    final maxMs =
+        _total.inMilliseconds > 0 ? _total.inMilliseconds : widget.duration * 1000;
+
     return Align(
       alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -95,22 +162,26 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  icon: Icon(
-                    _playing ? Icons.pause : Icons.play_arrow,
-                    color: widget.isMe ? Colors.white : Colors.black,
-                  ),
-                  onPressed: _toggle,
-                ),
+                _downloading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        icon: Icon(
+                          _playing ? Icons.pause : Icons.play_arrow,
+                          color: widget.isMe ? Colors.white : Colors.black,
+                        ),
+                        onPressed: _toggle,
+                      ),
                 SizedBox(
                   width: 120,
                   child: Slider(
                     min: 0,
-                    max: (_total.inMilliseconds > 0)
-                        ? _total.inMilliseconds.toDouble()
-                        : widget.duration * 1000,
+                    max: maxMs.toDouble(),
                     value: _position.inMilliseconds
-                        .clamp(0, _total.inMilliseconds)
+                        .clamp(0, maxMs)
                         .toDouble(),
                     onChanged: (v) async {
                       await _player.seek(
