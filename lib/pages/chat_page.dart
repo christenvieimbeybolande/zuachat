@@ -9,8 +9,7 @@ import 'package:vibration/vibration.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 import '../api/chat_messages.dart';
-import '../api/send_chat_message.dart';
-import '../api/send_audio_message.dart'; // ✅ AJOUT
+import '../api/send_chat_message.dart'; // ✅ API UNIQUE
 import '../api/delete_chat_message.dart';
 import '../pages/user_profile.dart';
 
@@ -33,14 +32,15 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  static const primary = Color(0xFFFF0000);
+  static const Color primary = Color(0xFFFF0000);
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
 
-  // ===================== AUDIO (AJOUT SANS CASSE) =====================
+  // ================= AUDIO =================
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
+
   Timer? _recordTimer;
   Duration _recordDuration = Duration.zero;
   bool _recording = false;
@@ -63,12 +63,13 @@ class _ChatPageState extends State<ChatPage> {
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     _recordTimer?.cancel();
+    _recorder.dispose();
     _player.dispose();
     super.dispose();
   }
 
   // ============================================================
-  // 🔄 Charger messages (INCHANGÉ)
+  // 🔄 LOAD MESSAGES
   // ============================================================
   Future<void> _load({bool initial = false, bool scrollToEnd = true}) async {
     final now = DateTime.now();
@@ -90,12 +91,10 @@ class _ChatPageState extends State<ChatPage> {
 
     try {
       final raw = await apiFetchChatMessages(widget.contactId);
-      final msgs = List<Map<String, dynamic>>.from(raw);
-
       if (!mounted) return;
 
       setState(() {
-        _messages = msgs;
+        _messages = List<Map<String, dynamic>>.from(raw);
         _loading = false;
       });
 
@@ -114,32 +113,33 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  bool _isMe(int senderId) => senderId != widget.contactId;
+
   // ============================================================
-  // ✉️ Envoyer message TEXTE (INCHANGÉ)
+  // ✉️ SEND TEXT
   // ============================================================
-  Future<void> _send() async {
+  Future<void> _sendText() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty || _sending) return;
 
     setState(() => _sending = true);
 
     try {
-      await apiSendChatMessage(
+      _msgCtrl.clear();
+
+      await apiSendMessage(
         receiverId: widget.contactId,
         message: text,
       );
 
-      _msgCtrl.clear();
       await _load(scrollToEnd: true);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  bool _isMe(int senderId) => senderId != widget.contactId;
-
   // ============================================================
-  // 🎙️ AUDIO — START (AJOUT)
+  // 🎙️ AUDIO START
   // ============================================================
   Future<void> _startRecording() async {
     if (!await _recorder.hasPermission()) return;
@@ -166,17 +166,21 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================================================
-  // 🎙️ AUDIO — STOP & SEND (AJOUT)
+  // 🎙️ AUDIO STOP & SEND
   // ============================================================
-  Future<void> _stopAndSendAudio() async {
+  Future<void> _stopRecordingAndSend() async {
     _recordTimer?.cancel();
+
     final path = await _recorder.stop();
     if (path == null) return;
 
     final file = File(path);
-    if (!file.existsSync() || _recordDuration.inSeconds == 0) return;
+    if (!file.existsSync() || _recordDuration.inSeconds == 0) {
+      setState(() => _recording = false);
+      return;
+    }
 
-    await apiSendAudioMessage(
+    await apiSendMessage(
       receiverId: widget.contactId,
       audioFile: file,
       duration: _recordDuration.inSeconds,
@@ -191,54 +195,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================================================
-  // 📌 Options message (INCHANGÉ)
-  // ============================================================
-  void _openOptions(Map msg, bool isMe) {
-    if (msg["deleted_by"] != null) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).cardColor,
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text("Copier"),
-              onTap: () {
-                Clipboard.setData(
-                  ClipboardData(text: msg["message"] ?? ""),
-                );
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text("Supprimer pour moi"),
-              onTap: () async {
-                Navigator.pop(context);
-                await apiDeleteMessage(msg["id"], forAll: false);
-                _load();
-              },
-            ),
-            if (isMe)
-              ListTile(
-                leading: const Icon(Icons.delete_forever),
-                title: const Text("Supprimer pour tout le monde"),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await apiDeleteMessage(msg["id"], forAll: true);
-                  _load();
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // 💬 BULLE (TEXTE + AUDIO)
+  // 🧱 MESSAGE BUBBLE
   // ============================================================
   Widget _bubble(Map m) {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
@@ -249,49 +206,18 @@ class _ChatPageState extends State<ChatPage> {
       return _audioBubble(m, isMe);
     }
 
-    final text = deleted ? "Message supprimé" : (m["message"] ?? "");
-    final time = m["time"] ?? "";
-
-    return GestureDetector(
-      onLongPress: deleted ? null : () => _openOptions(m, isMe),
-      child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin:
-              EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: deleted
-                ? Colors.grey
-                : isMe
-                    ? primary
-                    : Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment:
-                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              Text(
-                text,
-                style: TextStyle(
-                  color: deleted
-                      ? Colors.white
-                      : isMe
-                          ? Colors.white
-                          : Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.color,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                time,
-                style: const TextStyle(fontSize: 10, color: Colors.white70),
-              ),
-            ],
-          ),
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isMe ? primary : Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          deleted ? "Message supprimé" : (m["message"] ?? ""),
+          style: TextStyle(color: isMe ? Colors.white : null),
         ),
       ),
     );
@@ -301,8 +227,7 @@ class _ChatPageState extends State<ChatPage> {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin:
-            EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
+        margin: EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isMe ? primary : Colors.grey.shade300,
@@ -313,14 +238,11 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             IconButton(
               icon: const Icon(Icons.play_arrow, color: Colors.white),
-              onPressed: () async {
-                await _player.play(UrlSource(m['audio_path']));
-              },
+              onPressed: () =>
+                  _player.play(UrlSource(m['audio_path'])),
             ),
-            Text(
-              "${m['audio_duration']}s",
-              style: const TextStyle(color: Colors.white),
-            ),
+            Text("${m['audio_duration']}s",
+                style: const TextStyle(color: Colors.white)),
           ],
         ),
       ),
@@ -328,13 +250,12 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // ============================================================
-  // 📝 Input (TEXTE + AUDIO)
+  // 📝 INPUT
   // ============================================================
   Widget _inputField() {
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        color: Theme.of(context).cardColor,
         child: Row(
           children: [
             Expanded(
@@ -342,23 +263,16 @@ class _ChatPageState extends State<ChatPage> {
                 controller: _msgCtrl,
                 minLines: 1,
                 maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: "Votre message...",
-                  filled: true,
-                  fillColor: Theme.of(context).scaffoldBackgroundColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: const InputDecoration(
+                  hintText: "Votre message…",
                 ),
               ),
             ),
-            const SizedBox(width: 8),
             GestureDetector(
+              onTap: _sendText,
               onLongPress: _startRecording,
               onLongPressEnd: (_) {
-                if (_recording) _stopAndSendAudio();
+                if (_recording) _stopRecordingAndSend();
               },
               child: CircleAvatar(
                 backgroundColor: primary,
@@ -380,17 +294,9 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: primary,
-        titleSpacing: 0,
-        title: _buildHeader(),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () => _load(scrollToEnd: false),
-          ),
-        ],
+        title: Text(widget.contactName),
       ),
       body: Column(
         children: [
@@ -412,43 +318,6 @@ class _ChatPageState extends State<ChatPage> {
                       ),
           ),
           _inputField(),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // 🖼️ Header (INCHANGÉ)
-  // ============================================================
-  Widget _buildHeader() {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => UserProfilePage(userId: widget.contactId),
-          ),
-        );
-      },
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundImage: widget.contactPhoto.isNotEmpty
-                ? NetworkImage(widget.contactPhoto)
-                : const AssetImage("assets/default-avatar.png")
-                    as ImageProvider,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              widget.contactName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-          if (widget.badgeVerified)
-            const Icon(Icons.verified, color: Colors.white, size: 18),
         ],
       ),
     );
