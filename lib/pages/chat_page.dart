@@ -62,6 +62,11 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+
+    _msgCtrl.addListener(() {
+      setState(() {}); // 🔥 force rebuild pour changer l’icône
+    });
+
     _load(initial: true);
   }
 
@@ -283,7 +288,7 @@ class _ChatPageState extends State<ChatPage> {
     if (m['type'] == 'audio' && !deleted) {
       return ChatAudioBubble(
         isMe: isMe,
-        url: m['audio_path'],
+        url: 'https://zuachat.com/${m['audio_path']}',
         duration: int.tryParse('${m['audio_duration']}') ?? 0,
         time: m['time'] ?? '',
       );
