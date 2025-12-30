@@ -2,15 +2,15 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:vibration/vibration.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 
 import '../api/chat_messages.dart';
-import '../api/send_chat_message.dart'; // ✅ API UNIQUE
+import '../api/send_chat_message.dart';
 import '../api/delete_chat_message.dart';
+import '../core/env.dart';
 import '../pages/user_profile.dart';
 
 class ChatPage extends StatefulWidget {
@@ -34,10 +34,9 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   static const Color primary = Color(0xFFFF0000);
 
-  final TextEditingController _msgCtrl = TextEditingController();
-  final ScrollController _scrollCtrl = ScrollController();
+  final _msgCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
 
-  // ================= AUDIO =================
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
 
@@ -45,17 +44,35 @@ class _ChatPageState extends State<ChatPage> {
   Duration _recordDuration = Duration.zero;
   bool _recording = false;
 
+  Duration _audioPosition = Duration.zero;
+  Duration _audioTotal = Duration.zero;
+  int? _playingMessageId;
+
   bool _loading = true;
   bool _sending = false;
   bool _error = false;
 
   List<Map<String, dynamic>> _messages = [];
-  DateTime? _lastLoadAt;
 
   @override
   void initState() {
     super.initState();
     _load(initial: true);
+
+    _player.onPositionChanged.listen((p) {
+      setState(() => _audioPosition = p);
+    });
+
+    _player.onDurationChanged.listen((d) {
+      setState(() => _audioTotal = d);
+    });
+
+    _player.onPlayerComplete.listen((_) {
+      setState(() {
+        _playingMessageId = null;
+        _audioPosition = Duration.zero;
+      });
+    });
   }
 
   @override
@@ -68,27 +85,8 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
-  // ============================================================
-  // 🔄 LOAD MESSAGES
-  // ============================================================
-  Future<void> _load({bool initial = false, bool scrollToEnd = true}) async {
-    final now = DateTime.now();
-
-    if (!initial &&
-        _lastLoadAt != null &&
-        now.difference(_lastLoadAt!) < const Duration(seconds: 2)) {
-      return;
-    }
-
-    _lastLoadAt = now;
-
-    if (initial) {
-      setState(() {
-        _loading = true;
-        _error = false;
-      });
-    }
-
+  // ================= LOAD =================
+  Future<void> _load({bool initial = false}) async {
     try {
       final raw = await apiFetchChatMessages(widget.contactId);
       if (!mounted) return;
@@ -98,49 +96,33 @@ class _ChatPageState extends State<ChatPage> {
         _loading = false;
       });
 
-      if (scrollToEnd) {
-        await Future.delayed(const Duration(milliseconds: 80));
-        if (_scrollCtrl.hasClients) {
-          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-        }
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
       }
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _error = true;
-        _loading = false;
-      });
+      setState(() => _error = true);
     }
   }
 
   bool _isMe(int senderId) => senderId != widget.contactId;
 
-  // ============================================================
-  // ✉️ SEND TEXT
-  // ============================================================
+  // ================= SEND TEXT =================
   Future<void> _sendText() async {
     final text = _msgCtrl.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty) return;
 
-    setState(() => _sending = true);
+    _msgCtrl.clear();
 
-    try {
-      _msgCtrl.clear();
+    await apiSendMessage(
+      receiverId: widget.contactId,
+      message: text,
+    );
 
-      await apiSendMessage(
-        receiverId: widget.contactId,
-        message: text,
-      );
-
-      await _load(scrollToEnd: true);
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
+    _load();
   }
 
-  // ============================================================
-  // 🎙️ AUDIO START
-  // ============================================================
+  // ================= AUDIO =================
   Future<void> _startRecording() async {
     if (!await _recorder.hasPermission()) return;
 
@@ -165,20 +147,13 @@ class _ChatPageState extends State<ChatPage> {
     setState(() => _recording = true);
   }
 
-  // ============================================================
-  // 🎙️ AUDIO STOP & SEND
-  // ============================================================
   Future<void> _stopRecordingAndSend() async {
     _recordTimer?.cancel();
-
     final path = await _recorder.stop();
     if (path == null) return;
 
     final file = File(path);
-    if (!file.existsSync() || _recordDuration.inSeconds == 0) {
-      setState(() => _recording = false);
-      return;
-    }
+    if (!file.existsSync()) return;
 
     await apiSendMessage(
       receiverId: widget.contactId,
@@ -191,43 +166,20 @@ class _ChatPageState extends State<ChatPage> {
       _recordDuration = Duration.zero;
     });
 
-    _load(scrollToEnd: true);
+    _load();
   }
 
-  // ============================================================
-  // 🧱 MESSAGE BUBBLE
-  // ============================================================
-  Widget _bubble(Map m) {
-    final isMe = _isMe(int.parse("${m['sender_id']}"));
-    final deleted = m["deleted_by"] != null;
-    final type = m['type'] ?? 'text';
-
-    if (type == 'audio' && !deleted) {
-      return _audioBubble(m, isMe);
-    }
-
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isMe ? primary : Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          deleted ? "Message supprimé" : (m["message"] ?? ""),
-          style: TextStyle(color: isMe ? Colors.white : null),
-        ),
-      ),
-    );
-  }
-
+  // ================= BUBBLES =================
   Widget _audioBubble(Map m, bool isMe) {
+    final id = m['id'];
+    final url = "${Env.apiBase}${m['audio_path']}";
+
+    final playing = _playingMessageId == id;
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: EdgeInsets.fromLTRB(isMe ? 40 : 8, 4, isMe ? 8 : 40, 4),
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isMe ? primary : Colors.grey.shade300,
@@ -237,47 +189,102 @@ class _ChatPageState extends State<ChatPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.play_arrow, color: Colors.white),
-              onPressed: () =>
-                  _player.play(UrlSource(m['audio_path'])),
+              icon: Icon(playing ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white),
+              onPressed: () async {
+                if (playing) {
+                  await _player.pause();
+                  setState(() => _playingMessageId = null);
+                } else {
+                  await _player.play(UrlSource(url));
+                  setState(() => _playingMessageId = id);
+                }
+              },
             ),
-            Text("${m['audio_duration']}s",
-                style: const TextStyle(color: Colors.white)),
+            SizedBox(
+              width: 120,
+              child: LinearProgressIndicator(
+                value: _audioTotal.inMilliseconds == 0
+                    ? 0
+                    : _audioPosition.inMilliseconds /
+                        _audioTotal.inMilliseconds,
+                color: Colors.white,
+                backgroundColor: Colors.white24,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              m['time'] ?? '',
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
+            )
           ],
         ),
       ),
     );
   }
 
-  // ============================================================
-  // 📝 INPUT
-  // ============================================================
+  Widget _textBubble(Map m) {
+    final isMe = _isMe(int.parse("${m['sender_id']}"));
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isMe ? primary : Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Text(
+              m['message'] ?? '',
+              style: TextStyle(color: isMe ? Colors.white : null),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              m['time'] ?? '',
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= INPUT =================
   Widget _inputField() {
+    final hasText = _msgCtrl.text.trim().isNotEmpty;
+
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Row(
           children: [
             Expanded(
               child: TextField(
                 controller: _msgCtrl,
+                onChanged: (_) => setState(() {}),
                 minLines: 1,
-                maxLines: 4,
+                maxLines: 5,
                 decoration: const InputDecoration(
-                  hintText: "Votre message…",
+                  hintText: "Message",
+                  border: InputBorder.none,
                 ),
               ),
             ),
             GestureDetector(
-              onTap: _sendText,
-              onLongPress: _startRecording,
+              onTap: hasText ? _sendText : null,
+              onLongPress: hasText ? null : _startRecording,
               onLongPressEnd: (_) {
                 if (_recording) _stopRecordingAndSend();
               },
               child: CircleAvatar(
                 backgroundColor: primary,
                 child: Icon(
-                  _recording ? Icons.mic : Icons.send,
+                  hasText ? Icons.send : Icons.mic,
                   color: Colors.white,
                 ),
               ),
@@ -288,9 +295,7 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // ============================================================
-  // UI
-  // ============================================================
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -303,19 +308,18 @@ class _ChatPageState extends State<ChatPage> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _error
-                    ? Center(
-                        child: ElevatedButton(
-                          onPressed: () => _load(initial: true),
-                          child: const Text("Réessayer"),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.all(10),
-                        itemCount: _messages.length,
-                        itemBuilder: (_, i) => _bubble(_messages[i]),
-                      ),
+                : ListView.builder(
+                    controller: _scrollCtrl,
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) {
+                      final m = _messages[i];
+                      if (m['type'] == 'audio') {
+                        return _audioBubble(
+                            m, _isMe(int.parse("${m['sender_id']}")));
+                      }
+                      return _textBubble(m);
+                    },
+                  ),
           ),
           _inputField(),
         ],
