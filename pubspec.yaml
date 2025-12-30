@@ -36,7 +36,7 @@ dependencies:
 
   # 🎧 AUDIO / VIDÉO
   audioplayers: ^6.5.1
-  record: 5.1.2           # ⚠️ version FIXE (important)
+  record: ^6.1.2           # ⚠️ version FIXE (important)
   path_provider: ^2.1.4
   video_player: ^2.10.1
   video_compress: ^3.1.2
