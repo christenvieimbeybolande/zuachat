@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
 
 class ChatAudioBubble extends StatefulWidget {
   final bool isMe;
@@ -22,46 +23,47 @@ class ChatAudioBubble extends StatefulWidget {
 class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   final AudioPlayer _player = AudioPlayer();
 
-  bool _isPlaying = false;
   Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
+  Duration _total = Duration.zero;
+  bool _playing = false;
+
+  StreamSubscription? _posSub;
+  StreamSubscription? _durSub;
+  StreamSubscription? _stateSub;
 
   @override
   void initState() {
     super.initState();
 
-    _duration = Duration(seconds: widget.duration);
-
-    _player.onPlayerStateChanged.listen((state) {
-      setState(() {
-        _isPlaying = state == PlayerState.playing;
-      });
+    _durSub = _player.onDurationChanged.listen((d) {
+      setState(() => _total = d);
     });
 
-    _player.onPositionChanged.listen((pos) {
-      setState(() {
-        _position = pos;
-      });
+    _posSub = _player.onPositionChanged.listen((p) {
+      setState(() => _position = p);
     });
 
-    _player.onDurationChanged.listen((dur) {
-      setState(() {
-        _duration = dur;
-      });
-    });
-
-    _player.onPlayerComplete.listen((_) {
-      setState(() {
-        _isPlaying = false;
-        _position = Duration.zero;
-      });
+    _stateSub = _player.onPlayerStateChanged.listen((s) {
+      setState(() => _playing = s == PlayerState.playing);
     });
   }
 
   @override
   void dispose() {
+    _player.stop();
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _stateSub?.cancel();
     _player.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_playing) {
+      await _player.pause();
+    } else {
+      await _player.play(UrlSource(widget.url));
+    }
   }
 
   String _fmt(Duration d) {
@@ -72,9 +74,6 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isMe ? Colors.red : Theme.of(context).cardColor;
-    final fg = widget.isMe ? Colors.white : Colors.black87;
-
     return Align(
       alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -84,9 +83,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
           widget.isMe ? 8 : 40,
           4,
         ),
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: bg,
+          color: widget.isMe ? Colors.red : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -98,39 +97,34 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
               children: [
                 IconButton(
                   icon: Icon(
-                    _isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: fg,
+                    _playing ? Icons.pause : Icons.play_arrow,
+                    color: widget.isMe ? Colors.white : Colors.black,
                   ),
-                  onPressed: () async {
-                    if (_isPlaying) {
-                      await _player.pause();
-                    } else {
-                      await _player.play(
-                        UrlSource(widget.url),
-                      );
-                    }
-                  },
+                  onPressed: _toggle,
                 ),
                 SizedBox(
-                  width: 140,
+                  width: 120,
                   child: Slider(
                     min: 0,
-                    max: _duration.inSeconds
-                        .toDouble()
-                        .clamp(1, double.infinity),
-                    value: _position.inSeconds
-                        .toDouble()
-                        .clamp(0, _duration.inSeconds.toDouble()),
+                    max: (_total.inMilliseconds > 0)
+                        ? _total.inMilliseconds.toDouble()
+                        : widget.duration * 1000,
+                    value: _position.inMilliseconds
+                        .clamp(0, _total.inMilliseconds)
+                        .toDouble(),
                     onChanged: (v) async {
-                      await _player.seek(Duration(seconds: v.toInt()));
+                      await _player.seek(
+                        Duration(milliseconds: v.toInt()),
+                      );
                     },
-                    activeColor: fg,
-                    inactiveColor: fg.withOpacity(.3),
                   ),
                 ),
                 Text(
-                  '${_fmt(_position)} / ${_fmt(_duration)}',
-                  style: TextStyle(fontSize: 11, color: fg),
+                  '${_fmt(_position)} / ${_fmt(_total)}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: widget.isMe ? Colors.white70 : Colors.black54,
+                  ),
                 ),
               ],
             ),
@@ -139,7 +133,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
               widget.time,
               style: TextStyle(
                 fontSize: 10,
-                color: fg.withOpacity(.7),
+                color: widget.isMe ? Colors.white70 : Colors.black45,
               ),
             ),
           ],
