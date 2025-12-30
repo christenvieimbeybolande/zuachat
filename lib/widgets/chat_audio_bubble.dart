@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 class ChatAudioBubble extends StatefulWidget {
   final bool isMe;
   final String url;
-  final int duration;
+  final int duration; // 🔥 durée serveur (secondes)
   final String time;
 
   const ChatAudioBubble({
@@ -42,11 +42,12 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   @override
   void initState() {
     super.initState();
-
-    _initCache();
+    _prepareCache();
 
     _durSub = _player.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _total = d);
+      if (mounted && d.inMilliseconds > 0) {
+        setState(() => _total = d);
+      }
     });
 
     _posSub = _player.onPositionChanged.listen((p) {
@@ -58,12 +59,10 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     });
   }
 
-  Future<void> _initCache() async {
+  Future<void> _prepareCache() async {
     final dir = await getApplicationDocumentsDirectory();
     final audioDir = Directory('${dir.path}/chat_audios');
-    if (!audioDir.existsSync()) {
-      audioDir.createSync(recursive: true);
-    }
+    if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
     final name = widget.url.split('/').last;
     final file = File('${audioDir.path}/$name');
@@ -89,42 +88,35 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
       return;
     }
 
-    // 🔥 si déjà en cache → lecture locale
     if (_localFile != null && _localFile!.existsSync()) {
-      await _player.play(DeviceFileSource(_localFile!.path));
+      await _player.setSourceDeviceFile(_localFile!.path);
+      await _player.resume();
       return;
     }
 
-    // ⬇️ sinon télécharger
     await _downloadAndPlay();
   }
 
   Future<void> _downloadAndPlay() async {
     if (_downloading) return;
-
     setState(() => _downloading = true);
 
     try {
-      final response = await http.get(Uri.parse(widget.url));
-      if (response.statusCode != 200) {
-        throw Exception('Download failed');
-      }
+      final res = await http.get(Uri.parse(widget.url));
+      if (res.statusCode != 200) throw Exception();
 
       final dir = await getApplicationDocumentsDirectory();
       final audioDir = Directory('${dir.path}/chat_audios');
-      if (!audioDir.existsSync()) {
-        audioDir.createSync(recursive: true);
-      }
+      if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
       final name = widget.url.split('/').last;
       final file = File('${audioDir.path}/$name');
-      await file.writeAsBytes(response.bodyBytes);
+      await file.writeAsBytes(res.bodyBytes);
 
       _localFile = file;
 
-      await _player.play(DeviceFileSource(file.path));
-    } catch (_) {
-      // silencieux
+      await _player.setSourceDeviceFile(file.path);
+      await _player.resume();
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -138,8 +130,11 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final maxMs =
-        _total.inMilliseconds > 0 ? _total.inMilliseconds : widget.duration * 1000;
+    final serverDuration = Duration(seconds: widget.duration); // 🔥 fallback
+
+    final effectiveTotal = _total.inMilliseconds > 0 ? _total : serverDuration;
+
+    final maxMs = effectiveTotal.inMilliseconds;
 
     return Align(
       alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -180,18 +175,14 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
                   child: Slider(
                     min: 0,
                     max: maxMs.toDouble(),
-                    value: _position.inMilliseconds
-                        .clamp(0, maxMs)
-                        .toDouble(),
-                    onChanged: (v) async {
-                      await _player.seek(
-                        Duration(milliseconds: v.toInt()),
-                      );
+                    value: _position.inMilliseconds.clamp(0, maxMs).toDouble(),
+                    onChanged: (v) {
+                      _player.seek(Duration(milliseconds: v.toInt()));
                     },
                   ),
                 ),
                 Text(
-                  '${_fmt(_position)} / ${_fmt(_total)}',
+                  '${_fmt(_position)} / ${_fmt(effectiveTotal)}',
                   style: TextStyle(
                     fontSize: 10,
                     color: widget.isMe ? Colors.white70 : Colors.black54,
