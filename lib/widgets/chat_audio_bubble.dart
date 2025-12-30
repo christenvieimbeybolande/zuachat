@@ -21,19 +21,39 @@ class ChatAudioBubble extends StatefulWidget {
 
 class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   final AudioPlayer _player = AudioPlayer();
-  Duration _pos = Duration.zero;
-  bool _playing = false;
+
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    _player.onPositionChanged.listen((p) {
-      setState(() => _pos = p);
+
+    _duration = Duration(seconds: widget.duration);
+
+    _player.onPlayerStateChanged.listen((state) {
+      setState(() {
+        _isPlaying = state == PlayerState.playing;
+      });
     });
+
+    _player.onPositionChanged.listen((pos) {
+      setState(() {
+        _position = pos;
+      });
+    });
+
+    _player.onDurationChanged.listen((dur) {
+      setState(() {
+        _duration = dur;
+      });
+    });
+
     _player.onPlayerComplete.listen((_) {
       setState(() {
-        _playing = false;
-        _pos = Duration.zero;
+        _isPlaying = false;
+        _position = Duration.zero;
       });
     });
   }
@@ -44,57 +64,83 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     super.dispose();
   }
 
-  String _fmt(Duration d) =>
-      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  String _fmt(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final bg = widget.isMe ? Colors.red : Theme.of(context).cardColor;
+    final fg = widget.isMe ? Colors.white : Colors.black87;
 
     return Align(
       alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        margin: EdgeInsets.fromLTRB(
+          widget.isMe ? 40 : 8,
+          4,
+          widget.isMe ? 8 : 40,
+          4,
+        ),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Column(
+          crossAxisAlignment:
+              widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            IconButton(
-              icon: Icon(
-                _playing ? Icons.pause : Icons.play_arrow,
-                color: widget.isMe ? Colors.white : Colors.black,
-              ),
-              onPressed: () async {
-                if (_playing) {
-                  await _player.pause();
-                } else {
-                  await _player.play(
-                    UrlSource(
-                        'https://zuachat.com/uploads/audios/${widget.url}'),
-                  );
-                }
-                setState(() => _playing = !_playing);
-              },
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '${_fmt(_pos)} / ${_fmt(Duration(seconds: widget.duration))}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: widget.isMe ? Colors.white70 : Colors.black54,
+                IconButton(
+                  icon: Icon(
+                    _isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: fg,
+                  ),
+                  onPressed: () async {
+                    if (_isPlaying) {
+                      await _player.pause();
+                    } else {
+                      await _player.play(
+                        UrlSource(widget.url),
+                      );
+                    }
+                  },
+                ),
+                SizedBox(
+                  width: 140,
+                  child: Slider(
+                    min: 0,
+                    max: _duration.inSeconds
+                        .toDouble()
+                        .clamp(1, double.infinity),
+                    value: _position.inSeconds
+                        .toDouble()
+                        .clamp(0, _duration.inSeconds.toDouble()),
+                    onChanged: (v) async {
+                      await _player.seek(Duration(seconds: v.toInt()));
+                    },
+                    activeColor: fg,
+                    inactiveColor: fg.withOpacity(.3),
                   ),
                 ),
                 Text(
-                  widget.time,
-                  style: const TextStyle(fontSize: 10),
+                  '${_fmt(_position)} / ${_fmt(_duration)}',
+                  style: TextStyle(fontSize: 11, color: fg),
                 ),
               ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              widget.time,
+              style: TextStyle(
+                fontSize: 10,
+                color: fg.withOpacity(.7),
+              ),
             ),
           ],
         ),
