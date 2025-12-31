@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 
@@ -33,9 +34,6 @@
 
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
-
-	<key>CFBundleSignature</key>
-	<string>????</string>
 
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -72,28 +70,31 @@
 	<true/>
 
 	<!-- ===================== -->
-	<!-- 🔐 PERMISSIONS APPLE -->
+	<!-- 🔐 AUTORISATIONS APPLE -->
 	<!-- ===================== -->
 
-	<!-- 📸 Accès à la galerie -->
+	<!-- 📸 Galerie (lecture photos/vidéos) -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à votre galerie pour partager des photos et vidéos.</string>
 
-	<!-- 💾 Enregistrement dans la galerie -->
+	<!-- 💾 Sauvegarde dans la galerie -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>ZuaChat a besoin d’enregistrer des images et vidéos dans votre galerie.</string>
+	<string>ZuaChat a besoin d’enregistrer des photos et vidéos dans votre galerie.</string>
 
 	<!-- 📷 Caméra -->
 	<key>NSCameraUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à la caméra pour prendre des photos et vidéos.</string>
 
-	<!-- 🎤 Microphone -->
+	<!-- 🎤 Microphone (MESSAGES VOCAUX) -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer du son.</string>
+	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.</string>
 
-	<!-- 🎵 Audio (safe, recommandé) -->
-	<key>NSAppleMusicUsageDescription</key>
-	<string>ZuaChat utilise l’audio uniquement pour les fonctionnalités de l’application.</string>
+	<!-- 🌐 Réseau -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 
 </dict>
 </plist>
