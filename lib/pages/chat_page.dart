@@ -340,6 +340,11 @@ class _ChatPageState extends State<ChatPage> {
           url: audioUrl,
           duration: int.tryParse('${m['audio_duration']}') ?? 0,
           time: m['time'] ?? '',
+          avatarUrl: isMe
+              ? null
+              : (widget.contactPhoto.isNotEmpty
+                  ? widget.contactPhoto
+                  : 'https://zuachat.com/assets/default-avatar.png'),
         ),
       );
     }

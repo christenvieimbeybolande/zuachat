@@ -1,4 +1,3 @@
-// lib/widgets/chat_audio_bubble.dart
 import 'dart:async';
 import 'dart:io';
 
@@ -6,12 +5,14 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ChatAudioBubble extends StatefulWidget {
   final bool isMe;
-  final String url; // URL audio ABSOLUE et CORRECTE
-  final int duration; // durée serveur (secondes) – fallback
+  final String url;
+  final int duration;
   final String time;
+  final String? avatarUrl;
 
   const ChatAudioBubble({
     super.key,
@@ -19,6 +20,7 @@ class ChatAudioBubble extends StatefulWidget {
     required this.url,
     required this.duration,
     required this.time,
+    this.avatarUrl,
   });
 
   @override
@@ -34,16 +36,16 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   bool _playing = false;
   bool _downloading = false;
   bool _downloaded = false;
+  bool _listened = false;
+
+  double _speed = 1.0;
 
   File? _localFile;
 
-  StreamSubscription<Duration>? _posSub;
-  StreamSubscription<Duration>? _durSub;
-  StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription? _posSub;
+  StreamSubscription? _durSub;
+  StreamSubscription? _stateSub;
 
-  // ============================================================
-  // INIT
-  // ============================================================
   @override
   void initState() {
     super.initState();
@@ -63,26 +65,21 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     });
 
     _player.onPlayerComplete.listen((_) {
-      if (mounted) {
-        setState(() {
-          _playing = false;
-          _position = _total;
-        });
-      }
+      setState(() {
+        _playing = false;
+        _position = _total;
+        _listened = true;
+      });
     });
 
     _prepareCache();
   }
 
-  // ============================================================
-  // CACHE
-  // ============================================================
+  // ================= CACHE =================
   Future<void> _prepareCache() async {
     final dir = await getApplicationDocumentsDirectory();
     final audioDir = Directory('${dir.path}/chat_audios');
-    if (!audioDir.existsSync()) {
-      audioDir.createSync(recursive: true);
-    }
+    if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
     final name = widget.url.split('/').last;
     final file = File('${audioDir.path}/$name');
@@ -90,179 +87,175 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     if (file.existsSync()) {
       _localFile = file;
       _downloaded = true;
-      debugPrint('[audio] cache OK: ${file.path}');
-      if (mounted) setState(() {});
-    } else {
-      debugPrint('[audio] pas téléchargé: $name');
+      setState(() {});
     }
   }
 
-  // ============================================================
-  // DOWNLOAD
-  // ============================================================
+  // ================= DOWNLOAD =================
   Future<void> _download() async {
     if (_downloading) return;
-
     setState(() => _downloading = true);
 
     try {
-      debugPrint('[audio] téléchargement ${widget.url}');
       final res = await http.get(Uri.parse(widget.url));
-
-      if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}');
-      }
+      if (res.statusCode != 200) throw Exception();
 
       final dir = await getApplicationDocumentsDirectory();
       final audioDir = Directory('${dir.path}/chat_audios');
-      if (!audioDir.existsSync()) {
-        audioDir.createSync(recursive: true);
-      }
+      if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
-      final name = widget.url.split('/').last;
-      final file = File('${audioDir.path}/$name');
-
+      final file = File('${audioDir.path}/${widget.url.split('/').last}');
       await file.writeAsBytes(res.bodyBytes);
 
       _localFile = file;
       _downloaded = true;
-
-      debugPrint('[audio] téléchargé OK: ${file.path}');
-    } catch (e, st) {
-      debugPrint('[audio] ERREUR download: $e\n$st');
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
   }
 
-  // ============================================================
-  // PLAY / PAUSE
-  // ============================================================
+  // ================= PLAY =================
   Future<void> _togglePlay() async {
     if (!_downloaded || _localFile == null) return;
 
     if (_playing) {
       await _player.pause();
     } else {
+      await _player.setPlaybackRate(_speed);
       await _player.play(DeviceFileSource(_localFile!.path));
     }
   }
 
-  // ============================================================
-  // FORMAT
-  // ============================================================
+  void _toggleSpeed() {
+    setState(() {
+      _speed = _speed == 1.0
+          ? 1.5
+          : _speed == 1.5
+              ? 2.0
+              : 1.0;
+    });
+    _player.setPlaybackRate(_speed);
+  }
+
   String _fmt(Duration d) {
     final m = d.inMinutes;
     final s = d.inSeconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 
-  // ============================================================
-  // UI
-  // ============================================================
   @override
   Widget build(BuildContext context) {
-    final fallbackTotal = Duration(seconds: widget.duration);
-    final effectiveTotal = _total.inMilliseconds > 0 ? _total : fallbackTotal;
+    final total =
+        _total.inMilliseconds > 0 ? _total : Duration(seconds: widget.duration);
 
     final maxMs =
-        effectiveTotal.inMilliseconds > 0 ? effectiveTotal.inMilliseconds : 1;
+        total.inMilliseconds > 0 ? total.inMilliseconds.toDouble() : 1.0;
 
-    return Align(
-      alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(
-          widget.isMe ? 40 : 8,
-          4,
-          widget.isMe ? 8 : 40,
-          4,
-        ),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: widget.isMe ? Colors.red : Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ===== ICONE INTELLIGENTE =====
-                if (_downloading)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else if (!_downloaded)
-                  IconButton(
-                    icon: Icon(
-                      Icons.download,
-                      color: widget.isMe ? Colors.white : Colors.black,
-                    ),
-                    onPressed: _download,
-                  )
-                else
-                  IconButton(
-                    icon: Icon(
-                      _playing ? Icons.pause : Icons.play_arrow,
-                      color: widget.isMe ? Colors.white : Colors.black,
-                    ),
-                    onPressed: _togglePlay,
-                  ),
+    final bubbleColor = widget.isMe
+        ? Colors.red
+        : _listened
+            ? Colors.grey.shade200
+            : Theme.of(context).cardColor;
 
-                // ===== SLIDER =====
-                SizedBox(
-                  width: 140,
-                  child: Slider(
-                    min: 0,
-                    max: maxMs.toDouble(),
-                    value: _position.inMilliseconds.clamp(0, maxMs).toDouble(),
-                    onChanged: !_downloaded
-                        ? null
-                        : (v) async {
-                            final pos = Duration(milliseconds: v.toInt());
-                            await _player.seek(pos);
-                            setState(() => _position = pos);
-                          },
-                  ),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            widget.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!widget.isMe) _avatar(),
+          _bubble(bubbleColor, maxMs, total),
+          if (widget.isMe) _avatar(),
+        ],
+      ),
+    );
+  }
 
-                const SizedBox(width: 6),
-                Text(
-                  '${_fmt(_position)} / ${_fmt(effectiveTotal)}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: widget.isMe ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              widget.time,
-              style: TextStyle(
-                fontSize: 10,
-                color: widget.isMe ? Colors.white70 : Colors.black45,
-              ),
-            ),
-          ],
+  Widget _avatar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: CircleAvatar(
+        radius: 16,
+        backgroundImage: CachedNetworkImageProvider(
+          widget.avatarUrl ?? 'https://zuachat.com/assets/default-avatar.png',
         ),
       ),
     );
   }
 
-  // ============================================================
-  // DISPOSE
-  // ============================================================
+  Widget _bubble(Color color, double maxMs, Duration total) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 260),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_fmt(total),
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Row(
+            children: [
+              _downloading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      iconSize: 28,
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        !_downloaded
+                            ? Icons.download
+                            : _playing
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                      ),
+                      onPressed: !_downloaded ? _download : _togglePlay,
+                    ),
+              Expanded(
+                child: Slider(
+                  min: 0,
+                  max: maxMs,
+                  value: _position.inMilliseconds
+                      .clamp(0, maxMs.toInt())
+                      .toDouble(),
+                  onChanged: !_downloaded
+                      ? null
+                      : (v) => _player.seek(Duration(milliseconds: v.toInt())),
+                ),
+              ),
+              InkWell(
+                onTap: _toggleSpeed,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    '${_speed}x',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(widget.time,
+                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _posSub?.cancel();
     _durSub?.cancel();
     _stateSub?.cancel();
-    _player.stop();
     _player.dispose();
     super.dispose();
   }
