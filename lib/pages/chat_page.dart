@@ -36,7 +36,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   static const primary = Color(0xFFFF0000);
-  late final int myUserId;
+  int? myUserId;
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
@@ -65,7 +65,11 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
 
-    myUserId = ApiClient.userId; // ✅ ID réel de l'utilisateur connecté
+    try {
+      myUserId = ApiClient.userId;
+    } catch (_) {
+      myUserId = null;
+    }
 
     _msgCtrl.addListener(() {
       setState(() {});
@@ -208,7 +212,8 @@ class _ChatPageState extends State<ChatPage> {
       );
       _messages.add({
         "type": "audio",
-        "sender_id": myUserId,
+"sender_id": myUserId ?? 0,
+
 
         "local_path": _recordPath, // 🔥 OBLIGATOIRE
         "audio_duration": _recordDuration.inSeconds,
@@ -242,7 +247,11 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  bool _isMe(int senderId) => senderId != widget.contactId;
+bool _isMe(int senderId) {
+  if (myUserId == null) return false;
+  return senderId == myUserId;
+}
+
 
   // ============================================================
   // 📌 Options message
