@@ -146,6 +146,22 @@ class ApiClient {
     );
   }
 
+  // ===================================================================
+  // USER CONNECTÉ
+  // ===================================================================
+  static int? _userId;
+
+  static int get userId {
+    if (_userId == null) {
+      throw Exception("ApiClient.userId appelé avant initialisation");
+    }
+    return _userId!;
+  }
+
+  static void setUserId(int id) {
+    _userId = id;
+  }
+
   // ===========================================================================
   // REFRESH TOKEN
   // ===========================================================================

@@ -9,16 +9,28 @@ import 'package:http/http.dart' as http;
 
 class ChatAudioBubble extends StatefulWidget {
   final bool isMe;
-  final String url; // URL audio ABSOLUE et CORRECTE
-  final int duration; // durée serveur (secondes) – fallback
+
+  /// URL distante (audio reçu)
+  final String? url;
+
+  /// Chemin local (audio envoyé par moi)
+  final String? localPath;
+
+  final int duration; // secondes
   final String time;
+
+  final String myAvatar;
+  final String contactAvatar;
 
   const ChatAudioBubble({
     super.key,
     required this.isMe,
-    required this.url,
+    this.url,
+    this.localPath,
     required this.duration,
     required this.time,
+    required this.myAvatar,
+    required this.contactAvatar,
   });
 
   @override
@@ -48,6 +60,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   void initState() {
     super.initState();
 
+    // fallback durée serveur
+    _total = Duration(seconds: widget.duration);
+
     _durSub = _player.onDurationChanged.listen((d) {
       if (mounted && d.inMilliseconds > 0) {
         setState(() => _total = d);
@@ -71,47 +86,56 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
       }
     });
 
-    _prepareCache();
+    _prepareAudio();
   }
 
   // ============================================================
-  // CACHE
+  // PREPARE AUDIO (LOCAL > CACHE > REMOTE)
   // ============================================================
-  Future<void> _prepareCache() async {
+  Future<void> _prepareAudio() async {
+    // 1️⃣ AUDIO LOCAL (envoyé par moi)
+    if (widget.localPath != null && widget.localPath!.isNotEmpty) {
+      final file = File(widget.localPath!);
+      if (file.existsSync()) {
+        _localFile = file;
+        _downloaded = true;
+        if (mounted) setState(() {});
+        return;
+      }
+    }
+
+    // 2️⃣ AUDIO REÇU → cache
+    if (widget.url == null) return;
+
     final dir = await getApplicationDocumentsDirectory();
     final audioDir = Directory('${dir.path}/chat_audios');
     if (!audioDir.existsSync()) {
       audioDir.createSync(recursive: true);
     }
 
-    final name = widget.url.split('/').last;
+    final name = widget.url!.split('/').last;
     final file = File('${audioDir.path}/$name');
 
     if (file.existsSync()) {
       _localFile = file;
       _downloaded = true;
-      debugPrint('[audio] cache OK: ${file.path}');
       if (mounted) setState(() {});
-    } else {
-      debugPrint('[audio] pas téléchargé: $name');
     }
   }
 
   // ============================================================
-  // DOWNLOAD
+  // DOWNLOAD (SEULEMENT POUR AUDIO REÇU)
   // ============================================================
   Future<void> _download() async {
     if (_downloading) return;
+    if (widget.isMe) return;
+    if (widget.url == null) return;
 
     setState(() => _downloading = true);
 
     try {
-      debugPrint('[audio] téléchargement ${widget.url}');
-      final res = await http.get(Uri.parse(widget.url));
-
-      if (res.statusCode != 200) {
-        throw Exception('HTTP ${res.statusCode}');
-      }
+      final res = await http.get(Uri.parse(widget.url!));
+      if (res.statusCode != 200) return;
 
       final dir = await getApplicationDocumentsDirectory();
       final audioDir = Directory('${dir.path}/chat_audios');
@@ -119,17 +143,12 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
         audioDir.createSync(recursive: true);
       }
 
-      final name = widget.url.split('/').last;
+      final name = widget.url!.split('/').last;
       final file = File('${audioDir.path}/$name');
-
       await file.writeAsBytes(res.bodyBytes);
 
       _localFile = file;
       _downloaded = true;
-
-      debugPrint('[audio] téléchargé OK: ${file.path}');
-    } catch (e, st) {
-      debugPrint('[audio] ERREUR download: $e\n$st');
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -144,12 +163,13 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     if (_playing) {
       await _player.pause();
     } else {
+      await _player.stop(); // 🔥 évite audio multiple
       await _player.play(DeviceFileSource(_localFile!.path));
     }
   }
 
   // ============================================================
-  // FORMAT
+  // HELPERS
   // ============================================================
   String _fmt(Duration d) {
     final m = d.inMinutes;
@@ -157,99 +177,111 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 
+  ImageProvider _avatar(String url) {
+    if (url.isEmpty) {
+      return const AssetImage('assets/default-avatar.png');
+    }
+    return NetworkImage(url);
+  }
+
   // ============================================================
   // UI
   // ============================================================
   @override
   Widget build(BuildContext context) {
-    final fallbackTotal = Duration(seconds: widget.duration);
-    final effectiveTotal = _total.inMilliseconds > 0 ? _total : fallbackTotal;
+    final maxMs = _total.inMilliseconds > 0 ? _total.inMilliseconds : 1;
 
-    final maxMs =
-        effectiveTotal.inMilliseconds > 0 ? effectiveTotal.inMilliseconds : 1;
-
-    return Align(
-      alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(
-          widget.isMe ? 40 : 8,
-          4,
-          widget.isMe ? 8 : 40,
-          4,
-        ),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: widget.isMe ? Colors.red : Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment:
+            widget.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!widget.isMe)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundImage: _avatar(widget.contactAvatar),
+              ),
+            ),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 260),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.isMe
+                  ? const Color(0xFFDCF8C6)
+                  : Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ===== ICONE INTELLIGENTE =====
-                if (_downloading)
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else if (!_downloaded)
-                  IconButton(
-                    icon: Icon(
-                      Icons.download,
-                      color: widget.isMe ? Colors.white : Colors.black,
-                    ),
-                    onPressed: _download,
-                  )
-                else
-                  IconButton(
-                    icon: Icon(
-                      _playing ? Icons.pause : Icons.play_arrow,
-                      color: widget.isMe ? Colors.white : Colors.black,
-                    ),
-                    onPressed: _togglePlay,
-                  ),
-
-                // ===== SLIDER =====
-                SizedBox(
-                  width: 140,
-                  child: Slider(
-                    min: 0,
-                    max: maxMs.toDouble(),
-                    value: _position.inMilliseconds.clamp(0, maxMs).toDouble(),
-                    onChanged: !_downloaded
-                        ? null
-                        : (v) async {
-                            final pos = Duration(milliseconds: v.toInt());
-                            await _player.seek(pos);
-                            setState(() => _position = pos);
-                          },
-                  ),
-                ),
-
-                const SizedBox(width: 6),
                 Text(
-                  '${_fmt(_position)} / ${_fmt(effectiveTotal)}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: widget.isMe ? Colors.white70 : Colors.black54,
-                  ),
+                  _fmt(_total),
+                  style: const TextStyle(fontSize: 10, color: Colors.black54),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    if (_downloading)
+                      const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else if (!_downloaded && !widget.isMe)
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.download, size: 22),
+                        onPressed: _download,
+                      )
+                    else
+                      IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: Icon(
+                          _playing ? Icons.pause : Icons.play_arrow,
+                          size: 22,
+                        ),
+                        onPressed: _togglePlay,
+                      ),
+                    Expanded(
+                      child: Slider(
+                        min: 0,
+                        max: maxMs.toDouble(),
+                        value:
+                            _position.inMilliseconds.clamp(0, maxMs).toDouble(),
+                        onChanged: !_downloaded
+                            ? null
+                            : (v) async {
+                                final pos = Duration(milliseconds: v.toInt());
+                                await _player.seek(pos);
+                                setState(() => _position = pos);
+                              },
+                      ),
+                    ),
+                    Text(
+                      widget.time,
+                      style:
+                          const TextStyle(fontSize: 10, color: Colors.black45),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              widget.time,
-              style: TextStyle(
-                fontSize: 10,
-                color: widget.isMe ? Colors.white70 : Colors.black45,
+          ),
+          if (widget.isMe)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundImage: _avatar(widget.myAvatar),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -262,7 +294,6 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     _posSub?.cancel();
     _durSub?.cancel();
     _stateSub?.cancel();
-    _player.stop();
     _player.dispose();
     super.dispose();
   }

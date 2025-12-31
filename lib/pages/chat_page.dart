@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:vibration/vibration.dart';
+import '../api/client.dart';
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
@@ -35,6 +36,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   static const primary = Color(0xFFFF0000);
+  late final int myUserId;
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
@@ -63,8 +65,10 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
 
+    myUserId = ApiClient.userId; // ✅ ID réel de l'utilisateur connecté
+
     _msgCtrl.addListener(() {
-      setState(() {}); // 🔥 force rebuild pour changer l’icône
+      setState(() {});
     });
 
     _load(initial: true);
@@ -202,6 +206,16 @@ class _ChatPageState extends State<ChatPage> {
         filePath: _recordPath!,
         duration: _recordDuration.inSeconds,
       );
+      _messages.add({
+        "type": "audio",
+        "sender_id": myUserId,
+
+        "local_path": _recordPath, // 🔥 OBLIGATOIRE
+        "audio_duration": _recordDuration.inSeconds,
+        "time": "Maintenant",
+      });
+      setState(() {});
+
       await _load(scrollToEnd: true);
     }
 
@@ -313,33 +327,44 @@ class _ChatPageState extends State<ChatPage> {
 
     // 🔊 MESSAGE AUDIO
     if (m['type'] == 'audio' && !deleted) {
-      // 🔧 normalisation URL audio (OBLIGATOIRE)
-      String rawPath = m['audio_path'].toString().trim();
+      final isMe = _isMe(int.parse("${m['sender_id']}"));
 
-      rawPath = rawPath
-          .replaceAll(RegExp(r'(?<!:)//'), '/')
-          .replaceAll('audios/audios', 'audios')
-          .replaceAll('uploads/uploads', 'uploads');
+      // 🌐 URL distante (audio reçu)
+      String? audioUrl;
+      if (!isMe && m['audio_path'] != null) {
+        String rawPath = m['audio_path'].toString().trim();
 
-      if (!rawPath.startsWith('uploads/')) {
-        rawPath = 'uploads/$rawPath';
+        rawPath = rawPath
+            .replaceAll(RegExp(r'(?<!:)//'), '/')
+            .replaceAll('audios/audios', 'audios')
+            .replaceAll('uploads/uploads', 'uploads');
+
+        if (!rawPath.startsWith('uploads/')) {
+          rawPath = 'uploads/$rawPath';
+        }
+
+        audioUrl = rawPath.startsWith('http')
+            ? rawPath
+            : 'https://zuachat.com/$rawPath';
       }
 
-      final audioUrl =
-          rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
+      // 📁 chemin local (audio envoyé par moi)
+      final String? localPath = isMe ? m['local_path'] as String? : null;
 
-      print('[audio] FINAL URL => $audioUrl');
       return GestureDetector(
         onLongPress: () => _openOptions(
           msg: m,
           isMe: isMe,
-          isAudio: true, // 🎙️ TRÈS IMPORTANT
+          isAudio: true,
         ),
         child: ChatAudioBubble(
           isMe: isMe,
-          url: audioUrl,
+          url: audioUrl, // 🔥 seulement si reçu
+          localPath: localPath, // 🔥 seulement si moi
           duration: int.tryParse('${m['audio_duration']}') ?? 0,
           time: m['time'] ?? '',
+          myAvatar: "https://zuachat.com/uploads/avatars/me.jpg",
+          contactAvatar: widget.contactPhoto,
         ),
       );
     }
