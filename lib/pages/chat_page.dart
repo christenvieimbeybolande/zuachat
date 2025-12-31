@@ -233,7 +233,11 @@ class _ChatPageState extends State<ChatPage> {
   // ============================================================
   // 📌 Options message
   // ============================================================
-  void _openOptions(Map msg, bool isMe) {
+  void _openOptions({
+    required Map msg,
+    required bool isMe,
+    required bool isAudio,
+  }) {
     if (msg["deleted_by"] != null) return;
 
     showModalBottomSheet(
@@ -242,16 +246,20 @@ class _ChatPageState extends State<ChatPage> {
       builder: (_) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text("Copier"),
-              onTap: () {
-                Clipboard.setData(
-                  ClipboardData(text: msg["message"] ?? ""),
-                );
-                Navigator.pop(context);
-              },
-            ),
+            // 📝 COPIER (UNIQUEMENT TEXTE)
+            if (!isAudio)
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text("Copier"),
+                onTap: () {
+                  Clipboard.setData(
+                    ClipboardData(text: msg["message"] ?? ""),
+                  );
+                  Navigator.pop(context);
+                },
+              ),
+
+            // 🗑 SUPPRIMER POUR MOI
             ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text("Supprimer pour moi"),
@@ -261,6 +269,8 @@ class _ChatPageState extends State<ChatPage> {
                 _load();
               },
             ),
+
+            // 🗑 SUPPRIMER POUR TOUT LE MONDE (SEULEMENT SI MOI)
             if (isMe)
               ListTile(
                 leading: const Icon(Icons.delete_forever),
@@ -283,29 +293,54 @@ class _ChatPageState extends State<ChatPage> {
   Widget _bubble(Map m) {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
+    if (deleted) {
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Text(
+            "Message supprimé",
+            style: TextStyle(color: Colors.white, fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
+    }
 
     // 🔊 MESSAGE AUDIO
     if (m['type'] == 'audio' && !deleted) {
-// 🔧 normalisation URL audio (OBLIGATOIRE)
+      // 🔧 normalisation URL audio (OBLIGATOIRE)
       String rawPath = m['audio_path'].toString().trim();
 
-// sécurité anti doublons / erreurs serveur
       rawPath = rawPath
-          .replaceAll('//', '/')
+          .replaceAll(RegExp(r'(?<!:)//'), '/')
           .replaceAll('audios/audios', 'audios')
           .replaceAll('uploads/uploads', 'uploads');
 
-// URL finale
+      if (!rawPath.startsWith('uploads/')) {
+        rawPath = 'uploads/$rawPath';
+      }
+
       final audioUrl =
           rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
 
       print('[audio] FINAL URL => $audioUrl');
-
-      return ChatAudioBubble(
-        isMe: isMe,
-        url: audioUrl,
-        duration: int.tryParse('${m['audio_duration']}') ?? 0,
-        time: m['time'] ?? '',
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: true, // 🎙️ TRÈS IMPORTANT
+        ),
+        child: ChatAudioBubble(
+          isMe: isMe,
+          url: audioUrl,
+          duration: int.tryParse('${m['audio_duration']}') ?? 0,
+          time: m['time'] ?? '',
+        ),
       );
     }
 
@@ -315,7 +350,13 @@ class _ChatPageState extends State<ChatPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onLongPress: deleted ? null : () => _openOptions(m, isMe),
+      onLongPress: deleted
+          ? null
+          : () => _openOptions(
+                msg: m,
+                isMe: isMe,
+                isAudio: false, // 📝
+              ),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
