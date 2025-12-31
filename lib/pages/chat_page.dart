@@ -286,11 +286,24 @@ class _ChatPageState extends State<ChatPage> {
 
     // 🔊 MESSAGE AUDIO
     if (m['type'] == 'audio' && !deleted) {
+// 🔧 normalisation URL audio (OBLIGATOIRE)
+      String rawPath = m['audio_path'].toString().trim();
+
+// sécurité anti doublons / erreurs serveur
+      rawPath = rawPath
+          .replaceAll('//', '/')
+          .replaceAll('audios/audios', 'audios')
+          .replaceAll('uploads/uploads', 'uploads');
+
+// URL finale
+      final audioUrl =
+          rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
+
+      print('[audio] FINAL URL => $audioUrl');
+
       return ChatAudioBubble(
         isMe: isMe,
-        url: m['audio_path'].toString().startsWith('http')
-            ? m['audio_path']
-            : 'https://zuachat.com/${m['audio_path']}',
+        url: audioUrl,
         duration: int.tryParse('${m['audio_duration']}') ?? 0,
         time: m['time'] ?? '',
       );
