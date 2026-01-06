@@ -89,8 +89,7 @@ class _FeedPageState extends State<FeedPage>
   // ============================================================
   Future<void> _checkAuthState() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString('access_token') == null ||
-        prefs.getString('current_session_id') == null) {
+    if (prefs.getString('access_token') == null) {
       _redirectToLogin();
     } else {
       _load(reset: true);
@@ -164,6 +163,13 @@ class _FeedPageState extends State<FeedPage>
         _error = true;
         _loading = false;
         _refreshing = false;
+      });
+
+      // 🔁 Retry silencieux (iOS-friendly)
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          _load(reset: true);
+        }
       });
     }
   }
@@ -346,15 +352,22 @@ class _FeedPageState extends State<FeedPage>
     if (_error) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: Center(
-          child: ElevatedButton.icon(
-            onPressed: () => _load(reset: true),
-            icon: const Icon(Icons.refresh),
-            label: const Text("Réessayer"),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ZuaLoaderMini(),
+              SizedBox(height: 12),
+              Text(
+                "Connexion en cours…",
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
         ),
       );
     }
+
     final d = _data ?? {};
 
     final user = d['user'] ?? {};

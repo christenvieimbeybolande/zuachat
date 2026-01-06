@@ -10,6 +10,9 @@ import 'pages/login_page.dart';
 import 'pages/feed_page.dart';
 import 'theme/theme_controller.dart';
 
+// 🔥 Loader brandé
+import 'widgets/zua_loader.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -73,16 +76,13 @@ class ZuaChatApp extends StatelessWidget {
   const ZuaChatApp({super.key});
 
   // =========================================================
-  // 🔐 Vérification session
+  // 🔐 Vérification session (JWT ONLY)
   // =========================================================
   Future<bool> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-    final session = prefs.getString('current_session_id');
 
     if (token == null || token.isEmpty) return false;
-    if (session == null || session.isEmpty) return false;
-
     return true;
   }
 
@@ -96,7 +96,7 @@ class ZuaChatApp extends StatelessWidget {
       title: "ZuaChat",
 
       // =========================================================
-      // 🌍 INTERNATIONALISATION (OFFICIELLE FLUTTER)
+      // 🌍 INTERNATIONALISATION
       // =========================================================
       locale: localeController.locale,
       supportedLocales: const [
@@ -150,13 +150,16 @@ class ZuaChatApp extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(
+                child: ZuaLoader(
+                  looping: true,
+                  size: 64,
+                ),
+              ),
             );
           }
 
-          return snapshot.data == true
-              ? const FeedPage()
-              : const LoginPage();
+          return snapshot.data == true ? const FeedPage() : const LoginPage();
         },
       ),
 
