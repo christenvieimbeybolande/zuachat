@@ -23,7 +23,7 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
 
   // =========================================================
-  // 🔥 MIGRATION APRÈS MISE À JOUR
+  // 🔥 MIGRATION APRÈS MISE À JOUR (ANTI-BLOCAGE)
   // =========================================================
   await _migrateIfNeeded(prefs);
 
@@ -53,7 +53,7 @@ Future<void> main() async {
 }
 
 /// =========================================================
-/// 🔥 MIGRATION LOGIC (ANTI-BLOCAGE APRÈS UPDATE)
+/// 🔥 MIGRATION LOGIC
 /// =========================================================
 Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
@@ -61,15 +61,12 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   if (storedVersion != kAppVersion) {
     debugPrint("♻️ Migration app $storedVersion → $kAppVersion");
 
-    // 🧹 Nettoyage ciblé (ancien système)
+    // 🧹 Nettoyage ciblé (sécurité + stabilité)
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
 
-    // (optionnel mais safe)
-    // await prefs.clear();
-
-    // 💾 Sauvegarder la nouvelle version
+    // 💾 Sauvegarde version
     await prefs.setString('app_version', kAppVersion);
   }
 }
@@ -106,13 +103,17 @@ class ZuaChatApp extends StatelessWidget {
   const ZuaChatApp({super.key});
 
   // =========================================================
-  // 🔐 CHECK LOGIN (JWT ONLY)
+  // 🔐 CHECK LOGIN (TOKEN + SESSION)
   // =========================================================
   Future<bool> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
+    final session = prefs.getString('current_session_id');
 
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty) return false;
+    if (session == null || session.isEmpty) return false;
+
+    return true;
   }
 
   @override
