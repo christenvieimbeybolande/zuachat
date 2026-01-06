@@ -24,13 +24,10 @@ class ApiClient {
     return Dio(
       BaseOptions(
         baseUrl: Env.apiBase,
-
-        // ⏳ TEMPS LONG POUR UPLOAD (IMPORTANT)
-        connectTimeout: const Duration(minutes: 1),
-        sendTimeout: const Duration(minutes: 5),
-        receiveTimeout: const Duration(minutes: 5),
-
-        headers: {
+        connectTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(minutes: 2),
+        receiveTimeout: const Duration(minutes: 2),
+        headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
@@ -39,17 +36,16 @@ class ApiClient {
   }
 
   // ===========================================================================
-  // CLIENT PUBLIC (identique à l'ancien)
+  // CLIENT PUBLIC (non authentifié)
   // ===========================================================================
   static Dio raw() {
-    _client = _createClient();
-    _client!.interceptors.clear();
-    _client!.interceptors.add(_loggingInterceptor());
-    return _client!;
+    final dio = _createClient();
+    dio.interceptors.add(_loggingInterceptor());
+    return dio;
   }
 
   // ===========================================================================
-  // CLIENT AUTHENTIFIÉ (optimisé mais 100% compatible)
+  // CLIENT AUTHENTIFIÉ (JWT ONLY)
   // ===========================================================================
   static Future<Dio> authed() async {
     if (_client == null) {
@@ -58,15 +54,10 @@ class ApiClient {
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-    final sessionId = prefs.getString('current_session_id');
 
-    // Mettre les headers
     _client!.options.headers['Authorization'] =
         (token != null && token.isNotEmpty) ? "Bearer $token" : "";
-    _client!.options.headers['X-Session-Id'] = sessionId ?? "";
 
-    // 🔥 NE PAS vider les interceptors → sinon ça casse les anciennes pages
-    // On ajoute les interceptors UNE SEULE FOIS
     if (!_interceptorsAdded) {
       _client!.interceptors.clear();
       _client!.interceptors.add(_loggingInterceptor());
@@ -78,47 +69,35 @@ class ApiClient {
   }
 
   // ===========================================================================
-  // INTERCEPTOR AUTH
+  // INTERCEPTOR AUTH (AUTO REFRESH)
   // ===========================================================================
   static InterceptorsWrapper _authInterceptor() {
     return InterceptorsWrapper(
-      onResponse: (res, handler) async {
-        // Pour compatibilité totale avec les anciennes pages
-        if (res.data is Map && res.data['logout_required'] == true) {
-          print("🔴 logout_required → logoutLocal()");
-          await logoutLocal();
-        }
-        return handler.next(res);
-      },
       onError: (DioException e, handler) async {
         final res = e.response;
 
-        // Session révoquée par le serveur WEB
-        if (res?.statusCode == 401 &&
-            res?.data is Map &&
-            res!.data['error'] == 'SESSION_REVOKED') {
-          print("🔴 SESSION_REVOKED → logoutLocal()");
-          await logoutLocal();
-          return handler.next(e);
-        }
-
-        // Token expiré → refresh
+        // Token expiré → tentative refresh
         if (res?.statusCode == 401) {
-          print("⚠️ Token expiré → refresh_token");
+          print("⚠️ 401 → tentative refresh_token");
 
-          final ok = await _tryRefreshToken();
-          if (ok) {
+          final refreshed = await _tryRefreshToken();
+          if (refreshed) {
             final newToken = await _getAccessToken();
-            e.requestOptions.headers['Authorization'] = "Bearer $newToken";
+            if (newToken != null) {
+              e.requestOptions.headers['Authorization'] =
+                  "Bearer $newToken";
 
-            // Retry propre
-            final retry = await _client!.fetch(e.requestOptions);
-            return handler.resolve(retry);
+              try {
+                final retry = await _client!.fetch(e.requestOptions);
+                return handler.resolve(retry);
+              } catch (_) {
+                // fallback logout
+              }
+            }
           }
 
           print("❌ Refresh échoué → logout");
-          await clearTokens();
-          await reset();
+          await logoutLocal();
         }
 
         return handler.next(e);
@@ -147,29 +126,35 @@ class ApiClient {
   }
 
   // ===========================================================================
-  // REFRESH TOKEN
+  // REFRESH TOKEN (BODY JSON)
   // ===========================================================================
   static Future<bool> _tryRefreshToken() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final refresh = prefs.getString('refresh_token');
-      if (refresh == null) return false;
+      if (refresh == null || refresh.isEmpty) return false;
 
-      final dio = Dio();
+      final dio = Dio(BaseOptions(
+        baseUrl: Env.apiBase,
+        headers: const {'Content-Type': 'application/json'},
+      ));
+
       final res = await dio.post(
-        '${Env.apiBase}/refresh_token.php',
-        options: Options(headers: {'Authorization': 'Bearer $refresh'}),
+        '/refresh_token.php',
+        data: {'refresh_token': refresh},
       );
 
-      if (res.data['ok'] == true) {
+      if (res.data is Map && res.data['ok'] == true) {
+        final data = res.data['data'] ?? {};
         await saveTokens(
-          res.data['data']['access_token'],
-          res.data['data']['refresh_token'],
+          data['access_token'],
+          data['refresh_token'],
         );
         return true;
       }
       return false;
-    } catch (_) {
+    } catch (e) {
+      print("❌ Refresh exception: $e");
       return false;
     }
   }
@@ -180,14 +165,12 @@ class ApiClient {
   }
 
   // ===========================================================================
-  // DOWNLOAD FILES
+  // DOWNLOAD FILE
   // ===========================================================================
   static Future<File> downloadTempFile(String url) async {
     final dio = Dio();
-
     final tempDir = await getTemporaryDirectory();
     final filename = "zuachat_${DateTime.now().millisecondsSinceEpoch}.jpg";
-
     final file = File("${tempDir.path}/$filename");
 
     final response = await dio.get(
@@ -196,19 +179,17 @@ class ApiClient {
     );
 
     await file.writeAsBytes(response.data);
-
     return file;
   }
 
   // ===========================================================================
-  // LOGOUT
+  // LOGOUT LOCAL
   // ===========================================================================
   static Future<void> logoutLocal() async {
     print("🧹 logoutLocal()");
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
-    await prefs.remove('current_session_id');
     await reset();
   }
 }
@@ -219,7 +200,9 @@ class ApiClient {
 Future<void> saveTokens(String access, [String? refresh]) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('access_token', access);
-  if (refresh != null) prefs.setString('refresh_token', refresh);
+  if (refresh != null && refresh.isNotEmpty) {
+    await prefs.setString('refresh_token', refresh);
+  }
 }
 
 // ============================================================================
@@ -229,5 +212,4 @@ Future<void> clearTokens() async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove('access_token');
   await prefs.remove('refresh_token');
-  await prefs.remove('current_session_id');
 }
