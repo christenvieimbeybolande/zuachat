@@ -13,15 +13,24 @@ import 'theme/theme_controller.dart';
 // 🔥 Loader brandé
 import 'widgets/zua_loader.dart';
 
+/// 🔥 VERSION ACTUELLE DE L’APP
+/// ⚠️ À incrémenter à CHAQUE mise à jour importante
+const String kAppVersion = "2.0.0";
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final prefs = await SharedPreferences.getInstance();
 
+  // =========================================================
+  // 🔥 MIGRATION APRÈS MISE À JOUR
+  // =========================================================
+  await _migrateIfNeeded(prefs);
+
   // 🔥 Thème sauvegardé
   final savedTheme = prefs.getString('theme') ?? 'light';
 
-  // 🌍 Langue sauvegardée (fr / en / es)
+  // 🌍 Langue sauvegardée
   final savedLang = prefs.getString('app_lang') ?? 'fr';
 
   runApp(
@@ -44,7 +53,29 @@ Future<void> main() async {
 }
 
 /// =========================================================
-/// 🌍 CONTROLLER LANGUE (FR / EN / ES SEULEMENT)
+/// 🔥 MIGRATION LOGIC (ANTI-BLOCAGE APRÈS UPDATE)
+/// =========================================================
+Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
+  final storedVersion = prefs.getString('app_version');
+
+  if (storedVersion != kAppVersion) {
+    debugPrint("♻️ Migration app $storedVersion → $kAppVersion");
+
+    // 🧹 Nettoyage ciblé (ancien système)
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('current_session_id');
+
+    // (optionnel mais safe)
+    // await prefs.clear();
+
+    // 💾 Sauvegarder la nouvelle version
+    await prefs.setString('app_version', kAppVersion);
+  }
+}
+
+/// =========================================================
+/// 🌍 CONTROLLER LANGUE (FR / EN / ES)
 /// =========================================================
 class LocaleController extends ChangeNotifier {
   Locale _locale;
@@ -58,7 +89,6 @@ class LocaleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🔑 Mapping SIMPLE et SÛR
   static Locale fromCode(String code) {
     switch (code) {
       case 'en':
@@ -76,14 +106,13 @@ class ZuaChatApp extends StatelessWidget {
   const ZuaChatApp({super.key});
 
   // =========================================================
-  // 🔐 Vérification session (JWT ONLY)
+  // 🔐 CHECK LOGIN (JWT ONLY)
   // =========================================================
   Future<bool> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
 
-    if (token == null || token.isEmpty) return false;
-    return true;
+    return token != null && token.isNotEmpty;
   }
 
   @override
