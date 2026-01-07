@@ -35,9 +35,18 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 
-	<!-- iPhone uniquement -->
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- ===================== -->
+	<!-- 📱 APPAREILS SUPPORTÉS -->
+	<!-- ===================== -->
+
+	<!-- iPhone ONLY (désactive totalement iPad) -->
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+	</array>
 
 	<!-- ===================== -->
 	<!-- 🎬 INTERFACE & UI -->
@@ -49,11 +58,10 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 
-	<!-- ⚠️ OBLIGATOIRE POUR PASSER LA VALIDATION APPLE -->
+	<!-- Orientations iPhone -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
@@ -68,15 +76,19 @@
 	<!-- 🔐 AUTORISATIONS APPLE -->
 	<!-- ===================== -->
 
+	<!-- 📸 Galerie -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à votre galerie pour partager des photos et vidéos.</string>
 
+	<!-- 💾 Sauvegarde -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>ZuaChat a besoin d’enregistrer des photos et vidéos dans votre galerie.</string>
 
+	<!-- 📷 Caméra -->
 	<key>NSCameraUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à la caméra pour prendre des photos et vidéos.</string>
 
+	<!-- 🎤 Microphone -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.</string>
 
