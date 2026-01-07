@@ -56,6 +56,44 @@ class _ChatPageState extends State<ChatPage> {
   bool _sending = false;
   bool _error = false;
 
+  DateTime _parseMessageDate(Map m) {
+    // adapte si besoin selon ton backend
+    return DateTime.parse(m['created_at']);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final d = DateTime(date.year, date.month, date.day);
+
+    if (d == today) return "Aujourd’hui";
+    if (d == yesterday) return "Hier";
+
+    final diff = today.difference(d).inDays;
+
+    if (diff < 7) {
+      const days = [
+        'Lundi',
+        'Mardi',
+        'Mercredi',
+        'Jeudi',
+        'Vendredi',
+        'Samedi',
+        'Dimanche',
+      ];
+      return days[d.weekday - 1];
+    }
+
+    return "${d.day.toString().padLeft(2, '0')}/"
+        "${d.month.toString().padLeft(2, '0')}/"
+        "${d.year}";
+  }
+
   List<Map<String, dynamic>> _messages = [];
   DateTime? _lastLoadAt;
 
@@ -293,6 +331,28 @@ class _ChatPageState extends State<ChatPage> {
   Widget _bubble(Map m) {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 🎨 COULEURS UNIFIÉES (TEXTE + AUDIO)
+    final bgColor = deleted
+        ? Colors.grey
+        : isMe
+            ? primary
+            : Theme.of(context).cardColor;
+
+    final textColor = deleted
+        ? Colors.white
+        : isMe
+            ? Colors.white
+            : Theme.of(context).textTheme.bodyMedium?.color;
+
+    final timeColor = deleted
+        ? Colors.white
+        : isMe
+            ? Colors.white
+            : (isDark ? Colors.white54 : Colors.black45);
+
+    // ❌ MESSAGE SUPPRIMÉ
     if (deleted) {
       return Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -312,10 +372,8 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     // 🔊 MESSAGE AUDIO
-    if (m['type'] == 'audio' && !deleted) {
-      // 🔧 normalisation URL audio (OBLIGATOIRE)
+    if (m['type'] == 'audio') {
       String rawPath = m['audio_path'].toString().trim();
-
       rawPath = rawPath
           .replaceAll(RegExp(r'(?<!:)//'), '/')
           .replaceAll('audios/audios', 'audios')
@@ -328,36 +386,29 @@ class _ChatPageState extends State<ChatPage> {
       final audioUrl =
           rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
 
-      print('[audio] FINAL URL => $audioUrl');
-      return GestureDetector(
-
-        child: ChatAudioBubble(
-          isMe: isMe,
-          url: audioUrl,
-          duration: int.tryParse('${m['audio_duration']}') ?? 0,
-          time: m['time'] ?? '',
-          avatarUrl: isMe
-              ? null
-              : (widget.contactPhoto.isNotEmpty
-                  ? widget.contactPhoto
-                  : 'https://zuachat.com/assets/default-avatar.png'),
-        ),
+      return ChatAudioBubble(
+        isMe: isMe,
+        url: audioUrl,
+        duration: int.tryParse('${m['audio_duration']}') ?? 0,
+        time: m['time'] ?? '',
+        avatarUrl: isMe
+            ? null
+            : (widget.contactPhoto.isNotEmpty
+                ? widget.contactPhoto
+                : 'https://zuachat.com/assets/default-avatar.png'),
       );
     }
 
     // 📝 MESSAGE TEXTE
-    final text = deleted ? "Message supprimé" : (m["message"] ?? "");
+    final text = m["message"] ?? "";
     final time = m["time"] ?? "";
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onLongPress: deleted
-          ? null
-          : () => _openOptions(
-                msg: m,
-                isMe: isMe,
-                isAudio: false, // 📝
-              ),
+      onLongPress: () => _openOptions(
+        msg: m,
+        isMe: isMe,
+        isAudio: false,
+      ),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
@@ -369,11 +420,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: deleted
-                ? Colors.grey
-                : isMe
-                    ? primary
-                    : Theme.of(context).cardColor,
+            color: bgColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -383,26 +430,44 @@ class _ChatPageState extends State<ChatPage> {
               Text(
                 text,
                 style: TextStyle(
-                  color: deleted
-                      ? Colors.white
-                      : isMe
-                          ? Colors.white
-                          : Theme.of(context).textTheme.bodyMedium?.color,
+                  color: textColor,
+                  fontSize: 14,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 time,
                 style: TextStyle(
-                  fontSize: 10,
-                  color: isMe
-                      ? Colors.white70
-                      : (isDark ? Colors.white54 : Colors.black45),
+                  fontSize: 9,
+                  color: timeColor,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _dateHeader(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
       ),
     );
   }
@@ -483,7 +548,31 @@ class _ChatPageState extends State<ChatPage> {
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.all(10),
                   itemCount: _messages.length,
-                  itemBuilder: (_, i) => _bubble(_messages[i]),
+                  itemBuilder: (_, i) {
+                    final msg = _messages[i];
+                    final msgDate = _parseMessageDate(msg);
+
+                    bool showHeader;
+
+                    // 🔹 Premier message de la liste → TOUJOURS afficher date
+                    if (i == 0) {
+                      showHeader = true;
+                    } else {
+                      final prevMsg = _messages[i - 1];
+                      final prevDate = _parseMessageDate(prevMsg);
+
+                      // 🔹 Si le jour change entre le message précédent et celui-ci
+                      showHeader = !_isSameDay(msgDate, prevDate);
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showHeader) _dateHeader(_formatDateHeader(msgDate)),
+                        _bubble(msg),
+                      ],
+                    );
+                  },
                 );
               },
             ),
