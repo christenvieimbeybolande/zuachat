@@ -4,37 +4,69 @@ import 'dart:math';
 class FeedRanker {
   static final Random _r = Random();
 
-  /// 🎯 Mélange léger sans casser l'ordre serveur
   static List<Map<String, dynamic>> rank(List<Map<String, dynamic>> pubs) {
     final now = DateTime.now();
 
-    return pubs.map((p) {
-      double boost = 0;
+    final scored = pubs.map((p) {
+      // -------------------------
+      // ENGAGEMENT
+      // -------------------------
+      int likes = int.tryParse("${p['likes'] ?? 0}") ?? 0;
+      int comments = int.tryParse("${p['comments'] ?? 0}") ?? 0;
+      int shares = int.tryParse("${p['shares'] ?? 0}") ?? 0;
 
-      // 🔥 Boost engagement
-      int likes = p['likes'] ?? 0;
-      int comments = p['comments'] ?? 0;
-      int shares = p['shares'] ?? 0;
-      boost += (likes * 0.3) + (comments * 0.6) + (shares * 1);
+      double engagement = (likes * 1.0) + (comments * 2.0) + (shares * 3.0);
 
-      // 🔥 Boost récence (léger)
+      // -------------------------
+      // FRAÎCHEUR / ÂGE
+      // -------------------------
+      double freshnessBoost = 0.0;
+      double agePenalty = 0.0;
+
       if (p['created_at'] != null) {
         final t = DateTime.tryParse(p['created_at']);
         if (t != null) {
           final hours = now.difference(t).inHours;
-          boost += max(0, 10 - hours); // 10h max
+
+          // 🔥 Boost fort 48h
+          if (hours <= 48) {
+            freshnessBoost = (50 - hours).toDouble();
+          }
+
+          // ❌ Pénalité après 3 jours
+          if (hours > 72) {
+            agePenalty = min((hours - 72) * 0.15, 40.0);
+          }
         }
       }
 
-      // 🔥 Petit hasard (très faible)
-      boost += _r.nextDouble() * 2;
+      // -------------------------
+      // TYPE BONUS
+      // -------------------------
+      String type = "${p['type_publication']}".toLowerCase();
+      double typeBonus = (type == "profil" || type == "cover") ? 5.0 : 0.0;
+
+      // -------------------------
+      // RANDOM LÉGER
+      // -------------------------
+      double random = _r.nextDouble() * 3.0;
+
+      // -------------------------
+      // SCORE FINAL
+      // -------------------------
+      double score =
+          engagement + freshnessBoost + typeBonus + random - agePenalty;
 
       return {
-        'boost': boost,
-        'pub': p,
+        "score": score,
+        "pub": p,
       };
-    }).toList()
-      ..sort((a, b) => (b['boost'] as double).compareTo(a['boost'] as double))
-      ..map((e) => e['pub']).toList();
+    }).toList();
+
+    scored.sort(
+      (a, b) => (b["score"] as double).compareTo(a["score"] as double),
+    );
+
+    return scored.map((e) => e["pub"] as Map<String, dynamic>).toList();
   }
 }
