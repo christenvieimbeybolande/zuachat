@@ -65,6 +65,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     });
 
     _player.onPlayerComplete.listen((_) {
+      if (!mounted) return;
       setState(() {
         _playing = false;
         _position = _total;
@@ -79,7 +80,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
   Future<void> _prepareCache() async {
     final dir = await getApplicationDocumentsDirectory();
     final audioDir = Directory('${dir.path}/chat_audios');
-    if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
+    if (!audioDir.existsSync()) {
+      audioDir.createSync(recursive: true);
+    }
 
     final name = widget.url.split('/').last;
     final file = File('${audioDir.path}/$name');
@@ -87,13 +90,14 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     if (file.existsSync()) {
       _localFile = file;
       _downloaded = true;
-      setState(() {});
+      if (mounted) setState(() {});
     }
   }
 
   // ================= DOWNLOAD =================
   Future<void> _download() async {
     if (_downloading) return;
+
     setState(() => _downloading = true);
 
     try {
@@ -102,7 +106,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
       final dir = await getApplicationDocumentsDirectory();
       final audioDir = Directory('${dir.path}/chat_audios');
-      if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
+      if (!audioDir.existsSync()) {
+        audioDir.createSync(recursive: true);
+      }
 
       final file = File('${audioDir.path}/${widget.url.split('/').last}');
       await file.writeAsBytes(res.bodyBytes);
@@ -114,7 +120,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     }
   }
 
-  // ================= PLAY =================
+  // ================= PLAY / PAUSE =================
   Future<void> _togglePlay() async {
     if (!_downloaded || _localFile == null) return;
 
@@ -126,6 +132,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
     }
   }
 
+  // ================= SPEED =================
   void _toggleSpeed() {
     setState(() {
       _speed = _speed == 1.0
@@ -185,27 +192,24 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
 
   Widget _bubble(Color color, double maxMs, Duration total) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 260),
+      constraints: const BoxConstraints(maxWidth: 220),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_fmt(total),
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
           Row(
             children: [
               _downloading
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : IconButton(
-                      iconSize: 28,
+                      iconSize: 24,
                       padding: EdgeInsets.zero,
                       icon: Icon(
                         !_downloaded
@@ -225,26 +229,51 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble> {
                       .toDouble(),
                   onChanged: !_downloaded
                       ? null
-                      : (v) => _player.seek(Duration(milliseconds: v.toInt())),
+                      : (v) => _player.seek(
+                            Duration(milliseconds: v.toInt()),
+                          ),
                 ),
               ),
               InkWell(
                 onTap: _toggleSpeed,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
                     '${_speed}x',
                     style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
             ],
           ),
+
+          // ⏱️ COMPTEURS EN BAS
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                Text(
+                  _fmt(_position),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                const Spacer(),
+                Text(
+                  _fmt(total),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+
           Align(
             alignment: Alignment.centerRight,
-            child: Text(widget.time,
-                style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            child: Text(
+              widget.time,
+              style: const TextStyle(fontSize: 9, color: Colors.grey),
+            ),
           ),
         ],
       ),

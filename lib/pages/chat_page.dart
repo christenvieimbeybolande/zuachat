@@ -330,11 +330,7 @@ class _ChatPageState extends State<ChatPage> {
 
       print('[audio] FINAL URL => $audioUrl');
       return GestureDetector(
-        onLongPress: () => _openOptions(
-          msg: m,
-          isMe: isMe,
-          isAudio: true, // 🎙️ TRÈS IMPORTANT
-        ),
+
         child: ChatAudioBubble(
           isMe: isMe,
           url: audioUrl,
@@ -573,20 +569,22 @@ class _ChatPageState extends State<ChatPage> {
             ),
             const SizedBox(width: 8),
             CircleAvatar(
-              backgroundColor: primary,
+              backgroundColor: _isRecording ? Colors.red : primary,
               child: GestureDetector(
-                onTap: _msgCtrl.text.trim().isNotEmpty
-                    ? (_sending ? null : _send)
-                    : null,
-                onLongPress:
-                    _msgCtrl.text.trim().isEmpty ? _startRecording : null,
-                onLongPressEnd: _msgCtrl.text.trim().isEmpty
-                    ? (_) {
-                        if (!_isLocked) {
-                          _stopRecording(send: true);
-                        }
-                      }
-                    : null,
+                onTap: () async {
+                  // 📝 TEXTE → ENVOYER
+                  if (_msgCtrl.text.trim().isNotEmpty) {
+                    if (!_sending) _send();
+                    return;
+                  }
+
+                  // 🎙️ AUDIO
+                  if (!_isRecording) {
+                    await _startRecording(); // ▶️ start
+                  } else {
+                    await _stopRecording(send: true); // ⏹️ stop + send
+                  }
+                },
                 child: _sending
                     ? const SizedBox(
                         width: 16,
@@ -594,7 +592,11 @@ class _ChatPageState extends State<ChatPage> {
                         child: CircularProgressIndicator(color: Colors.white),
                       )
                     : Icon(
-                        _msgCtrl.text.trim().isEmpty ? Icons.mic : Icons.send,
+                        _msgCtrl.text.trim().isNotEmpty
+                            ? Icons.send
+                            : _isRecording
+                                ? Icons.send // 🔴 pendant enregistrement
+                                : Icons.mic,
                         color: Colors.white,
                       ),
               ),
