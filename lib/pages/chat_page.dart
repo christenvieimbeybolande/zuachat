@@ -532,7 +532,7 @@ class _ChatPageState extends State<ChatPage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.send, color: Colors.green),
+            icon: const Icon(Icons.send, color: Color.fromARGB(255, 255, 0, 0)),
             onPressed: () => _stopRecording(send: true),
           ),
         ],
