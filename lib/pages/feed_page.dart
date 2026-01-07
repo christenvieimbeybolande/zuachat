@@ -18,6 +18,7 @@ import 'add_publication_page.dart';
 import 'login_page.dart';
 import 'story_editor_page.dart';
 import 'story_viewer_page.dart';
+import '../utils/feed_ranker.dart';
 import 'search_page.dart';
 import 'reels_page.dart';
 
@@ -129,6 +130,7 @@ class _FeedPageState extends State<FeedPage>
           List<Map<String, dynamic>>.from(res['publications'] ?? []);
 
       // 2️⃣ Appliquer le tri intelligent
+      final ranked = FeedRanker.rank(newPubs);
 
       setState(() {
         _data = res;
@@ -143,7 +145,7 @@ class _FeedPageState extends State<FeedPage>
           _publications.clear();
         }
 
-        _publications.addAll(newPubs);
+        _publications.addAll(ranked);
       });
 
       _animCtrl.forward(from: 0.0);
@@ -199,8 +201,10 @@ class _FeedPageState extends State<FeedPage>
             List<Map<String, dynamic>>.from(res['publications'] ?? []);
 
         if (fresh.isNotEmpty) {
+          final ranked = FeedRanker.rank(fresh);
+
           setState(() {
-            _publications.addAll(fresh);
+            _publications.addAll(ranked);
           });
         }
       }
