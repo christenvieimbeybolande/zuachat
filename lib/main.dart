@@ -15,7 +15,7 @@ import 'widgets/zua_loader.dart';
 
 /// 🔥 VERSION ACTUELLE DE L’APP
 /// ⚠️ À incrémenter à CHAQUE mise à jour importante
-const String kAppVersion = "2.5.0";
+const String kAppVersion = "3.0.0";
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
