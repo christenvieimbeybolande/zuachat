@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 // 🔥 FIREBASE
 import 'package:firebase_core/firebase_core.dart';
@@ -133,11 +136,12 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   }
 
   /// =========================================================
-  /// 🔔 INIT NOTIFICATIONS (SON AUTOMATIQUE)
+  /// 🔔 INIT FCM + ENVOI TOKEN BACKEND
   /// =========================================================
   Future<void> _initFCM() async {
     final FirebaseMessaging fcm = FirebaseMessaging.instance;
 
+    // Permission (Android 13+)
     await fcm.requestPermission(
       alert: true,
       badge: true,
@@ -147,7 +151,39 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     final token = await fcm.getToken();
     debugPrint("🔔 FCM TOKEN: $token");
 
-    // 👉 À ENVOYER AU BACKEND PLUS TARD
+    if (token != null) {
+      await _sendFcmTokenToBackend(token);
+    }
+  }
+
+  /// =========================================================
+  /// 🔗 ENVOI TOKEN AU BACKEND
+  /// =========================================================
+  Future<void> _sendFcmTokenToBackend(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accessToken = prefs.getString('access_token');
+
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint("ℹ️ Pas connecté → token non envoyé");
+        return;
+      }
+
+      final res = await http.post(
+        Uri.parse('https://zuachat.com/api/save_fcm_token.php'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'fcm_token': token,
+        }),
+      );
+
+      debugPrint("📤 FCM envoyé (${res.statusCode})");
+    } catch (e) {
+      debugPrint("❌ Erreur envoi FCM: $e");
+    }
   }
 
   /// =========================================================
@@ -231,7 +267,9 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
             );
           }
 
-          return snapshot.data == true ? const FeedPage() : const LoginPage();
+          return snapshot.data == true
+              ? const FeedPage()
+              : const LoginPage();
         },
       ),
 
