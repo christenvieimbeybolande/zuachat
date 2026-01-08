@@ -368,12 +368,29 @@ class _ChatPageState extends State<ChatPage> {
   Widget _bubble(Map m) {
     final msgId = int.parse(m['id'].toString());
 
-    _messageKeys.putIfAbsent(msgId, () => GlobalKey());
+    _messageKeys.putIfAbsent(
+      msgId,
+      () => GlobalKey(),
+    );
 
     return Container(
-      key: _messageKeys[msgId], // 🔥 clé DIRECTE
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      child: _bubbleContent(m),
+      key: _messageKeys[msgId],
+      child: Dismissible(
+        key: ValueKey('msg_${m['id']}'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          setState(() {
+            _replyToMessage = Map<String, dynamic>.from(m);
+          });
+          return false;
+        },
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          child: const Icon(Icons.reply, color: Colors.grey),
+        ),
+        child: _bubbleContent(m),
+      ),
     );
   }
 
@@ -440,27 +457,37 @@ class _ChatPageState extends State<ChatPage> {
       final audioUrl =
           rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
 
-      return GestureDetector(
-        onHorizontalDragEnd: (_) {
+      return Dismissible(
+        key: ValueKey('audio_${m['id']}'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
           setState(() {
             _replyToMessage = Map<String, dynamic>.from(m);
           });
+          return false;
         },
-        onLongPress: () => _openOptions(
-          msg: m,
-          isMe: isMe,
-          isAudio: true,
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          child: const Icon(Icons.reply, color: Colors.grey),
         ),
-        child: ChatAudioBubble(
-          isMe: isMe,
-          url: audioUrl,
-          duration: int.tryParse('${m['audio_duration']}') ?? 0,
-          time: m['time'] ?? '',
-          avatarUrl: isMe
-              ? null
-              : (widget.contactPhoto.isNotEmpty
-                  ? widget.contactPhoto
-                  : 'https://zuachat.com/assets/default-avatar.png'),
+        child: GestureDetector(
+          onLongPress: () => _openOptions(
+            msg: m,
+            isMe: isMe,
+            isAudio: true,
+          ),
+          child: ChatAudioBubble(
+            isMe: isMe,
+            url: audioUrl,
+            duration: int.tryParse('${m['audio_duration']}') ?? 0,
+            time: m['time'] ?? '',
+            avatarUrl: isMe
+                ? null
+                : (widget.contactPhoto.isNotEmpty
+                    ? widget.contactPhoto
+                    : 'https://zuachat.com/assets/default-avatar.png'),
+          ),
         ),
       );
     }
@@ -514,9 +541,7 @@ class _ChatPageState extends State<ChatPage> {
                     child: Text(
                       m['reply_type'] == 'audio'
                           ? '🎤 Message audio'
-                          : (m['reply_message']?.toString().isNotEmpty == true
-                              ? m['reply_message']
-                              : 'Message'),
+                          : (m['reply_message'] ?? ''),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
