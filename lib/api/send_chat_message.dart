@@ -5,15 +5,23 @@ import 'client.dart';
 Future<void> apiSendChatMessage({
   required int receiverId,
   required String message,
+  int? replyTo, // ✅ NOUVEAU (réponse à un message)
 }) async {
   final dio = await ApiClient.authed();
 
+  final Map<String, dynamic> payload = {
+    'receiver_id': receiverId,
+    'message': message,
+  };
+
+  // 🔥 AJOUT reply_to seulement si présent
+  if (replyTo != null) {
+    payload['reply_to'] = replyTo;
+  }
+
   final Response res = await dio.post(
     '/send_message_api.php',
-    data: jsonEncode({
-      'receiver_id': receiverId,
-      'message': message,
-    }),
+    data: jsonEncode(payload),
     options: Options(
       headers: {'Content-Type': 'application/json'},
     ),

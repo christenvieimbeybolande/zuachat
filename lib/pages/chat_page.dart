@@ -42,6 +42,7 @@ class _ChatPageState extends State<ChatPage> {
   // 🎙️ AUDIO STATE
   // =========================
   final AudioRecorder _recorder = AudioRecorder();
+  Map<String, dynamic>? _replyToMessage;
 
   bool _isRecording = false;
   bool _isLocked = false;
@@ -177,7 +178,9 @@ class _ChatPageState extends State<ChatPage> {
       await apiSendChatMessage(
         receiverId: widget.contactId,
         message: text,
+        replyTo: _replyToMessage?['id'], // 🔥 NOUVEAU
       );
+      setState(() => _replyToMessage = null);
 
       _msgCtrl.clear();
       await _load(scrollToEnd: true);
@@ -329,11 +332,29 @@ class _ChatPageState extends State<ChatPage> {
   // 💬 Bulle message (dark / light)
   // ============================================================
   Widget _bubble(Map m) {
+    return Dismissible(
+      key: ValueKey('msg_${m['id']}'),
+      direction: DismissDirection.startToEnd, // 👉 swipe droite
+      confirmDismiss: (_) async {
+        setState(() {
+          _replyToMessage = Map<String, dynamic>.from(m);
+        });
+        return false; // ❌ ne pas supprimer
+      },
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Icon(Icons.reply, color: Colors.grey),
+      ),
+      child: _bubbleContent(m),
+    );
+  }
+
+  Widget _bubbleContent(Map m) {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // 🎨 COULEURS UNIFIÉES (TEXTE + AUDIO)
     final bgColor = deleted
         ? Colors.grey
         : isMe
@@ -371,7 +392,7 @@ class _ChatPageState extends State<ChatPage> {
       );
     }
 
-    // 🔊 MESSAGE AUDIO
+    // 🔊 AUDIO
     if (m['type'] == 'audio') {
       String rawPath = m['audio_path'].toString().trim();
       rawPath = rawPath
@@ -386,20 +407,27 @@ class _ChatPageState extends State<ChatPage> {
       final audioUrl =
           rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
 
-      return ChatAudioBubble(
-        isMe: isMe,
-        url: audioUrl,
-        duration: int.tryParse('${m['audio_duration']}') ?? 0,
-        time: m['time'] ?? '',
-        avatarUrl: isMe
-            ? null
-            : (widget.contactPhoto.isNotEmpty
-                ? widget.contactPhoto
-                : 'https://zuachat.com/assets/default-avatar.png'),
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: true,
+        ),
+        child: ChatAudioBubble(
+          isMe: isMe,
+          url: audioUrl,
+          duration: int.tryParse('${m['audio_duration']}') ?? 0,
+          time: m['time'] ?? '',
+          avatarUrl: isMe
+              ? null
+              : (widget.contactPhoto.isNotEmpty
+                  ? widget.contactPhoto
+                  : 'https://zuachat.com/assets/default-avatar.png'),
+        ),
       );
     }
 
-    // 📝 MESSAGE TEXTE
+    // 📝 TEXTE
     final text = m["message"] ?? "";
     final time = m["time"] ?? "";
 
@@ -429,18 +457,12 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               Text(
                 text,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: textColor, fontSize: 14),
               ),
               const SizedBox(height: 4),
               Text(
                 time,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: timeColor,
-                ),
+                style: TextStyle(fontSize: 9, color: timeColor),
               ),
             ],
           ),
@@ -467,6 +489,54 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
           const Expanded(child: Divider()),
+        ],
+      ),
+    );
+  }
+
+  Widget _replyPreview() {
+    if (_replyToMessage == null) return const SizedBox.shrink();
+
+    final isAudio = _replyToMessage!['type'] == 'audio';
+    final text =
+        isAudio ? "🎤 Message audio" : (_replyToMessage!['message'] ?? '');
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.05), // 🌫️ sombre léger
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: primary, width: 4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Répondre à",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              setState(() => _replyToMessage = null);
+            },
+          ),
         ],
       ),
     );
@@ -577,6 +647,7 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
+          _replyPreview(),
           _inputField(),
         ],
       ),
