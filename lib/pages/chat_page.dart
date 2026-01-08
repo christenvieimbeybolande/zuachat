@@ -517,12 +517,9 @@ class _ChatPageState extends State<ChatPage> {
             url: audioUrl,
             duration: int.tryParse('${m['audio_duration']}') ?? 0,
             time: m['time'] ?? '',
-            avatarUrl: isMe
-                ? null
-                : (widget.contactPhoto.isNotEmpty
-                    ? widget.contactPhoto
-                    : 'https://zuachat.com/assets/default-avatar.png'),
-            replyPreview: _replyPreviewBubble(m), // ✅ LIGNE MANQUANTE
+            seen: m['seen'] == 1, // ✅ LIGNE CLÉ
+            avatarUrl: isMe ? null : widget.contactPhoto,
+            replyPreview: _replyPreviewBubble(m),
           ),
         ),
       );
@@ -568,9 +565,16 @@ class _ChatPageState extends State<ChatPage> {
               const SizedBox(height: 4),
 
               // ⏰ HEURE
-              Text(
-                time,
-                style: TextStyle(fontSize: 9, color: timeColor),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    time,
+                    style: TextStyle(fontSize: 9, color: timeColor),
+                  ),
+                  const SizedBox(width: 4),
+                  _seenIcon(m, isMe), // ✅ AJOUT
+                ],
               ),
             ],
           ),
@@ -599,6 +603,18 @@ class _ChatPageState extends State<ChatPage> {
           const Expanded(child: Divider()),
         ],
       ),
+    );
+  }
+
+  Widget _seenIcon(Map m, bool isMe) {
+    if (!isMe) return const SizedBox.shrink();
+
+    final bool seen = m['seen'] == 1;
+
+    return Icon(
+      Icons.done_all,
+      size: 14,
+      color: seen ? Colors.lightBlueAccent : Colors.white70,
     );
   }
 

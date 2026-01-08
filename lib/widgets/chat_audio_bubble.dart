@@ -13,7 +13,8 @@ class ChatAudioBubble extends StatefulWidget {
   final int duration;
   final String time;
   final String? avatarUrl;
-  final Widget? replyPreview; // ✅ AJOUT
+  final bool seen; // ✅ AJOUT
+  final Widget? replyPreview;
 
   const ChatAudioBubble({
     super.key,
@@ -21,8 +22,9 @@ class ChatAudioBubble extends StatefulWidget {
     required this.url,
     required this.duration,
     required this.time,
+    required this.seen, // ✅ AJOUT
     this.avatarUrl,
-    this.replyPreview, // ✅ AJOUT
+    this.replyPreview,
   });
 
   @override
@@ -166,9 +168,16 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
                 if (widget.replyPreview != null) widget.replyPreview!,
 
                 // 🕒 HEURE EN HAUT
-                Text(
-                  widget.time,
-                  style: TextStyle(fontSize: 9, color: fg),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.time,
+                      style: TextStyle(fontSize: 9, color: fg),
+                    ),
+                    const SizedBox(width: 4),
+                    _seenIcon(), // ✅ AJOUT
+                  ],
                 ),
 
                 Row(
@@ -252,6 +261,18 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
           if (isMe) _avatar(),
         ],
       ),
+    );
+  }
+
+  Widget _seenIcon() {
+    if (!widget.isMe) return const SizedBox.shrink();
+
+    return Icon(
+      Icons.done_all,
+      size: 14,
+      color: widget.seen
+          ? Colors.lightBlueAccent // ✓✓ vu
+          : Colors.white70, // ✓✓ envoyé
     );
   }
 
