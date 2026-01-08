@@ -262,26 +262,26 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _scrollToMessage(int messageId) {
-    
-    final key = _messageKeys[messageId];
-    if (key == null) return;
+    if (!_messageKeys.containsKey(messageId)) return;
 
-    final context = key.currentContext;
+    final key = _messageKeys[messageId];
+    final context = key?.currentContext;
     if (context == null) return;
 
     setState(() {
       _highlightedMessageId = messageId;
     });
 
-    Scrollable.ensureVisible(
-      context,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      alignment: 0.3,
-    );
+    Future.delayed(const Duration(milliseconds: 50), () {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+        alignment: 0.3,
+      );
+    });
 
-    // 🔥 enlever le highlight après 800 ms
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 900), () {
       if (mounted && _highlightedMessageId == messageId) {
         setState(() => _highlightedMessageId = null);
       }
@@ -401,6 +401,9 @@ class _ChatPageState extends State<ChatPage> {
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final replyBgColor = isMe
+        ? Colors.white
+        : (isDark ? Colors.grey.shade800 : Colors.grey.shade200);
 
     final bgColor = deleted
         ? Colors.grey
@@ -454,22 +457,37 @@ class _ChatPageState extends State<ChatPage> {
       final audioUrl =
           rawPath.startsWith('http') ? rawPath : 'https://zuachat.com/$rawPath';
 
-      return GestureDetector(
-        onLongPress: () => _openOptions(
-          msg: m,
-          isMe: isMe,
-          isAudio: true,
+      return Dismissible(
+        key: ValueKey('audio_${m['id']}'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          setState(() {
+            _replyToMessage = Map<String, dynamic>.from(m);
+          });
+          return false;
+        },
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          child: const Icon(Icons.reply, color: Colors.grey),
         ),
-        child: ChatAudioBubble(
-          isMe: isMe,
-          url: audioUrl,
-          duration: int.tryParse('${m['audio_duration']}') ?? 0,
-          time: m['time'] ?? '',
-          avatarUrl: isMe
-              ? null
-              : (widget.contactPhoto.isNotEmpty
-                  ? widget.contactPhoto
-                  : 'https://zuachat.com/assets/default-avatar.png'),
+        child: GestureDetector(
+          onLongPress: () => _openOptions(
+            msg: m,
+            isMe: isMe,
+            isAudio: true,
+          ),
+          child: ChatAudioBubble(
+            isMe: isMe,
+            url: audioUrl,
+            duration: int.tryParse('${m['audio_duration']}') ?? 0,
+            time: m['time'] ?? '',
+            avatarUrl: isMe
+                ? null
+                : (widget.contactPhoto.isNotEmpty
+                    ? widget.contactPhoto
+                    : 'https://zuachat.com/assets/default-avatar.png'),
+          ),
         ),
       );
     }
@@ -514,7 +532,7 @@ class _ChatPageState extends State<ChatPage> {
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.06),
+                      color: replyBgColor,
                       borderRadius: BorderRadius.circular(8),
                       border: Border(
                         left: BorderSide(color: primary, width: 3),
