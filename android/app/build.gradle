@@ -85,3 +85,6 @@ android {
 flutter {
     source "../.."
 }
+
+// 🔥 FIREBASE (OBLIGATOIRE)
+apply plugin: 'com.google.gms.google-services'

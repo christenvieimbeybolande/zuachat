@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "936846962572",
+    "project_id": "zuachat",
+    "storage_bucket": "zuachat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:936846962572:android:488185989508aba396b0a9",
+        "android_client_info": {
+          "package_name": "com.cimstudiodev.zuachat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAClWKQ5BwHIEmxXlf8BsHb9lAcnvor7Ek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
