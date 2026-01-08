@@ -455,11 +455,40 @@ class _ChatPageState extends State<ChatPage> {
             crossAxisAlignment:
                 isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
+              // 🔁 MESSAGE RÉPONDU (AFFICHAGE)
+              if (m['reply_to'] != null && m['reply_message'] != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border(
+                      left: BorderSide(color: primary, width: 3),
+                    ),
+                  ),
+                  child: Text(
+                    m['reply_type'] == 'audio'
+                        ? '🎤 Message audio'
+                        : (m['reply_message'] ?? ''),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+
+              // 📝 MESSAGE PRINCIPAL
               Text(
                 text,
                 style: TextStyle(color: textColor, fontSize: 14),
               ),
+
               const SizedBox(height: 4),
+
+              // ⏰ HEURE
               Text(
                 time,
                 style: TextStyle(fontSize: 9, color: timeColor),
