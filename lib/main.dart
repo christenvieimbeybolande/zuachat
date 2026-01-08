@@ -9,6 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+// 🔔 LOCAL NOTIFICATIONS (SON EN FOREGROUND)
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 // 🌍 Localisation
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'gen_l10n/app_localizations.dart';
@@ -25,6 +28,10 @@ import 'widgets/zua_loader.dart';
 
 /// 🔥 VERSION ACTUELLE
 const String kAppVersion = "3.5.0";
+
+/// 🔔 Local notifications instance
+final FlutterLocalNotificationsPlugin localNotifications =
+    FlutterLocalNotificationsPlugin();
 
 /// =========================================================
 /// 🔔 FCM BACKGROUND HANDLER
@@ -43,15 +50,15 @@ Future<void> main() async {
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-  final prefs = await SharedPreferences.getInstance();
+  // 🔔 Init local notifications
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidInit);
+  await localNotifications.initialize(initSettings);
 
-  // 🔄 Migration
+  final prefs = await SharedPreferences.getInstance();
   await _migrateIfNeeded(prefs);
 
-  // 🎨 Thème
   final savedTheme = prefs.getString('theme') ?? 'light';
-
-  // 🌍 Langue
   final savedLang = prefs.getString('app_lang') ?? 'fr';
 
   runApp(
@@ -80,12 +87,10 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
 
   if (storedVersion != kAppVersion) {
-    debugPrint("♻️ Migration app $storedVersion → $kAppVersion");
-
+    debugPrint("♻️ Migration $storedVersion → $kAppVersion");
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
-
     await prefs.setString('app_version', kAppVersion);
   }
 }
@@ -95,7 +100,6 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
 /// =========================================================
 class LocaleController extends ChangeNotifier {
   Locale _locale;
-
   LocaleController(this._locale);
 
   Locale get locale => _locale;
@@ -133,20 +137,16 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   void initState() {
     super.initState();
     _initFCM();
+    _listenForegroundNotifications();
   }
 
   /// =========================================================
   /// 🔔 INIT FCM + ENVOI TOKEN BACKEND
   /// =========================================================
   Future<void> _initFCM() async {
-    final FirebaseMessaging fcm = FirebaseMessaging.instance;
+    final fcm = FirebaseMessaging.instance;
 
-    // Permission (Android 13+)
-    await fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await fcm.requestPermission(alert: true, badge: true, sound: true);
 
     final token = await fcm.getToken();
     debugPrint("🔔 FCM TOKEN: $token");
@@ -157,6 +157,31 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   }
 
   /// =========================================================
+  /// 🔔 NOTIFICATION + SON EN FOREGROUND
+  /// =========================================================
+  void _listenForegroundNotifications() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      final notif = message.notification;
+      if (notif == null) return;
+
+      localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        notif.title ?? 'ZuaChat',
+        notif.body ?? '',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'zuachat_default',
+            'ZuaChat Notifications',
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+          ),
+        ),
+      );
+    });
+  }
+
+  /// =========================================================
   /// 🔗 ENVOI TOKEN AU BACKEND
   /// =========================================================
   Future<void> _sendFcmTokenToBackend(String token) async {
@@ -164,23 +189,16 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
       final prefs = await SharedPreferences.getInstance();
       final accessToken = prefs.getString('access_token');
 
-      if (accessToken == null || accessToken.isEmpty) {
-        debugPrint("ℹ️ Pas connecté → token non envoyé");
-        return;
-      }
+      if (accessToken == null || accessToken.isEmpty) return;
 
-      final res = await http.post(
+      await http.post(
         Uri.parse('https://zuachat.com/api/save_fcm_token.php'),
         headers: {
           'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'fcm_token': token,
-        }),
+        body: jsonEncode({'fcm_token': token}),
       );
-
-      debugPrint("📤 FCM envoyé (${res.statusCode})");
     } catch (e) {
       debugPrint("❌ Erreur envoi FCM: $e");
     }
@@ -191,26 +209,19 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   /// =========================================================
   Future<bool> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
-    final session = prefs.getString('current_session_id');
-
-    if (token == null || token.isEmpty) return false;
-    if (session == null || session.isEmpty) return false;
-
-    return true;
+    return prefs.getString('access_token')?.isNotEmpty == true &&
+        prefs.getString('current_session_id')?.isNotEmpty == true;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeController>();
-    final localeController = context.watch<LocaleController>();
+    final locale = context.watch<LocaleController>();
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
-
-      // 🌍 Langue
-      locale: localeController.locale,
+      locale: locale.locale,
       supportedLocales: const [
         Locale('fr'),
         Locale('en'),
@@ -222,61 +233,22 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-
-      // ☀️ Thème clair
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF0F2F5),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF0000),
-          brightness: Brightness.light,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFF0000),
-          foregroundColor: Colors.white,
-        ),
-      ),
-
-      // 🌙 Thème sombre
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF18191A),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF0000),
-          brightness: Brightness.dark,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFF0000),
-          foregroundColor: Colors.white,
-        ),
-      ),
-
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
-
-      // 🏠 HOME
+      theme: ThemeData(useMaterial3: true),
+      darkTheme: ThemeData.dark(useMaterial3: true),
       home: FutureBuilder<bool>(
         future: _checkLogin(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Scaffold(
               body: Center(
                 child: ZuaLoader(looping: true, size: 64),
               ),
             );
           }
-
-          return snapshot.data == true
-              ? const FeedPage()
-              : const LoginPage();
+          return snapshot.data! ? const FeedPage() : const LoginPage();
         },
       ),
-
-      routes: {
-        '/login': (_) => const LoginPage(),
-        '/feed': (_) => const FeedPage(),
-      },
     );
   }
 }
