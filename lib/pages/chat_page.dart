@@ -249,7 +249,11 @@ class _ChatPageState extends State<ChatPage> {
         receiverId: widget.contactId,
         filePath: _recordPath!,
         duration: _recordDuration.inSeconds,
+        replyTo: _replyToMessage?['id'], // ✅ AJOUT
       );
+
+      setState(() => _replyToMessage = null); // ✅ TRÈS IMPORTANT
+
       await _load(scrollToEnd: true);
     }
 
@@ -357,6 +361,37 @@ class _ChatPageState extends State<ChatPage> {
                 },
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _replyPreviewBubble(Map m) {
+    if (m['reply_to'] == null || m['reply_type'] == null) {
+      return const SizedBox.shrink();
+    }
+
+    return GestureDetector(
+      onTap: () {
+        _scrollToMessage(int.parse(m['reply_to'].toString()));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            left: BorderSide(color: primary, width: 3),
+          ),
+        ),
+        child: Text(
+          m['reply_type'] == 'audio'
+              ? '🎤 Message audio'
+              : (m['reply_message'] ?? ''),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12),
         ),
       ),
     );
@@ -487,6 +522,7 @@ class _ChatPageState extends State<ChatPage> {
                 : (widget.contactPhoto.isNotEmpty
                     ? widget.contactPhoto
                     : 'https://zuachat.com/assets/default-avatar.png'),
+            replyPreview: _replyPreviewBubble(m), // ✅ LIGNE MANQUANTE
           ),
         ),
       );
@@ -521,36 +557,7 @@ class _ChatPageState extends State<ChatPage> {
                 isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
               // 🔁 MESSAGE RÉPONDU (AFFICHAGE)
-              if (m['reply_to'] != null && m['reply_message'] != null)
-                GestureDetector(
-                  onTap: () {
-                    if (m['reply_to'] != null) {
-                      _scrollToMessage(int.parse(m['reply_to'].toString()));
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: replyBgColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border(
-                        left: BorderSide(color: primary, width: 3),
-                      ),
-                    ),
-                    child: Text(
-                      m['reply_type'] == 'audio'
-                          ? '🎤 Message audio'
-                          : (m['reply_message'] ?? ''),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                ),
+              _replyPreviewBubble(m),
 
               // 📝 MESSAGE PRINCIPAL
               Text(

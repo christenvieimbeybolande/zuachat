@@ -13,6 +13,7 @@ class ChatAudioBubble extends StatefulWidget {
   final int duration;
   final String time;
   final String? avatarUrl;
+  final Widget? replyPreview; // ✅ AJOUT
 
   const ChatAudioBubble({
     super.key,
@@ -21,6 +22,7 @@ class ChatAudioBubble extends StatefulWidget {
     required this.duration,
     required this.time,
     this.avatarUrl,
+    this.replyPreview, // ✅ AJOUT
   });
 
   @override
@@ -72,8 +74,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
     final audioDir = Directory('${dir.path}/chat_audios');
     if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
-    final file =
-        File('${audioDir.path}/${widget.url.split('/').last}');
+    final file = File('${audioDir.path}/${widget.url.split('/').last}');
     if (file.existsSync()) {
       _localFile = file;
       _downloaded = true;
@@ -94,8 +95,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
       final audioDir = Directory('${dir.path}/chat_audios');
       if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
 
-      final file =
-          File('${audioDir.path}/${widget.url.split('/').last}');
+      final file = File('${audioDir.path}/${widget.url.split('/').last}');
       await file.writeAsBytes(res.bodyBytes);
 
       _localFile = file;
@@ -119,7 +119,11 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
 
   void _toggleSpeed() {
     setState(() {
-      _speed = _speed == 1.0 ? 1.5 : _speed == 1.5 ? 2.0 : 1.0;
+      _speed = _speed == 1.0
+          ? 1.5
+          : _speed == 1.5
+              ? 2.0
+              : 1.0;
     });
     _player.setPlaybackRate(_speed);
   }
@@ -132,9 +136,8 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
 
   @override
   Widget build(BuildContext context) {
-    final total = _total.inMilliseconds > 0
-        ? _total
-        : Duration(seconds: widget.duration);
+    final total =
+        _total.inMilliseconds > 0 ? _total : Duration(seconds: widget.duration);
 
     final maxMs =
         total.inMilliseconds > 0 ? total.inMilliseconds.toDouble() : 1.0;
@@ -159,6 +162,9 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 🔁 PREVIEW DU MESSAGE RÉPONDU
+                if (widget.replyPreview != null) widget.replyPreview!,
+
                 // 🕒 HEURE EN HAUT
                 Text(
                   widget.time,
@@ -191,16 +197,15 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
                                         : Icons.play_arrow,
                                 color: fg,
                               ),
-                              onPressed:
-                                  !_downloaded ? _download : _togglePlay,
+                              onPressed: !_downloaded ? _download : _togglePlay,
                             ),
                     ),
                     Expanded(
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 2,
-                          thumbShape:
-                              const RoundSliderThumbShape(enabledThumbRadius: 5),
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 5),
                           activeTrackColor: fg,
                           inactiveTrackColor: fg.withOpacity(.3),
                           thumbColor: fg,
@@ -238,8 +243,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
                     Text(_fmt(_position),
                         style: TextStyle(fontSize: 9, color: fg)),
                     const Spacer(),
-                    Text(_fmt(total),
-                        style: TextStyle(fontSize: 9, color: fg)),
+                    Text(_fmt(total), style: TextStyle(fontSize: 9, color: fg)),
                   ],
                 ),
               ],
@@ -257,8 +261,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
       child: CircleAvatar(
         radius: 16,
         backgroundImage: CachedNetworkImageProvider(
-          widget.avatarUrl ??
-              'https://zuachat.com/assets/default-avatar.png',
+          widget.avatarUrl ?? 'https://zuachat.com/assets/default-avatar.png',
         ),
       ),
     );
