@@ -2,35 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// 🌍 Localisation Flutter (gen_l10n)
+// 🔥 FIREBASE
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+// 🌍 Localisation
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'gen_l10n/app_localizations.dart';
 
+// 📄 Pages
 import 'pages/login_page.dart';
 import 'pages/feed_page.dart';
+
+// 🎨 Thème
 import 'theme/theme_controller.dart';
 
-// 🔥 Loader brandé
+// 🔄 Loader
 import 'widgets/zua_loader.dart';
 
-/// 🔥 VERSION ACTUELLE DE L’APP
-/// ⚠️ À incrémenter à CHAQUE mise à jour importante
+/// 🔥 VERSION ACTUELLE
 const String kAppVersion = "3.5.0";
 
+/// =========================================================
+/// 🔔 FCM BACKGROUND HANDLER
+/// =========================================================
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
+/// =========================================================
+/// 🚀 MAIN
+/// =========================================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 🔥 Firebase
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+
   final prefs = await SharedPreferences.getInstance();
 
-  // =========================================================
-  // 🔥 MIGRATION APRÈS MISE À JOUR (ANTI-BLOCAGE)
-  // =========================================================
+  // 🔄 Migration
   await _migrateIfNeeded(prefs);
 
-  // 🔥 Thème sauvegardé
+  // 🎨 Thème
   final savedTheme = prefs.getString('theme') ?? 'light';
 
-  // 🌍 Langue sauvegardée
+  // 🌍 Langue
   final savedLang = prefs.getString('app_lang') ?? 'fr';
 
   runApp(
@@ -53,7 +71,7 @@ Future<void> main() async {
 }
 
 /// =========================================================
-/// 🔥 MIGRATION LOGIC
+/// 🔄 MIGRATION
 /// =========================================================
 Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
@@ -61,18 +79,16 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   if (storedVersion != kAppVersion) {
     debugPrint("♻️ Migration app $storedVersion → $kAppVersion");
 
-    // 🧹 Nettoyage ciblé (sécurité + stabilité)
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
 
-    // 💾 Sauvegarde version
     await prefs.setString('app_version', kAppVersion);
   }
 }
 
 /// =========================================================
-/// 🌍 CONTROLLER LANGUE (FR / EN / ES)
+/// 🌍 CONTROLLER LANGUE
 /// =========================================================
 class LocaleController extends ChangeNotifier {
   Locale _locale;
@@ -99,12 +115,44 @@ class LocaleController extends ChangeNotifier {
   }
 }
 
-class ZuaChatApp extends StatelessWidget {
+/// =========================================================
+/// 📱 APP
+/// =========================================================
+class ZuaChatApp extends StatefulWidget {
   const ZuaChatApp({super.key});
 
-  // =========================================================
-  // 🔐 CHECK LOGIN (TOKEN + SESSION)
-  // =========================================================
+  @override
+  State<ZuaChatApp> createState() => _ZuaChatAppState();
+}
+
+class _ZuaChatAppState extends State<ZuaChatApp> {
+  @override
+  void initState() {
+    super.initState();
+    _initFCM();
+  }
+
+  /// =========================================================
+  /// 🔔 INIT NOTIFICATIONS (SON AUTOMATIQUE)
+  /// =========================================================
+  Future<void> _initFCM() async {
+    final FirebaseMessaging fcm = FirebaseMessaging.instance;
+
+    await fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    final token = await fcm.getToken();
+    debugPrint("🔔 FCM TOKEN: $token");
+
+    // 👉 À ENVOYER AU BACKEND PLUS TARD
+  }
+
+  /// =========================================================
+  /// 🔐 CHECK LOGIN
+  /// =========================================================
   Future<bool> _checkLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
@@ -125,9 +173,7 @@ class ZuaChatApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
 
-      // =========================================================
-      // 🌍 INTERNATIONALISATION
-      // =========================================================
+      // 🌍 Langue
       locale: localeController.locale,
       supportedLocales: const [
         Locale('fr'),
@@ -141,7 +187,7 @@ class ZuaChatApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
 
-      // ================= THEME CLAIR =================
+      // ☀️ Thème clair
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
@@ -156,7 +202,7 @@ class ZuaChatApp extends StatelessWidget {
         ),
       ),
 
-      // ================= THEME SOMBRE =================
+      // 🌙 Thème sombre
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -171,20 +217,16 @@ class ZuaChatApp extends StatelessWidget {
         ),
       ),
 
-      // 🌙 MODE ACTIF
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
 
-      // ================= HOME =================
+      // 🏠 HOME
       home: FutureBuilder<bool>(
         future: _checkLogin(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(
-                child: ZuaLoader(
-                  looping: true,
-                  size: 64,
-                ),
+                child: ZuaLoader(looping: true, size: 64),
               ),
             );
           }
@@ -193,7 +235,6 @@ class ZuaChatApp extends StatelessWidget {
         },
       ),
 
-      // ================= ROUTES =================
       routes: {
         '/login': (_) => const LoginPage(),
         '/feed': (_) => const FeedPage(),

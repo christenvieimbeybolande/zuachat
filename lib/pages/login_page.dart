@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:dio/dio.dart';
+import '../api/client.dart'; // ton ApiClient
 
 import '../api/auth_login.dart';
 import '../theme/theme_controller.dart';
@@ -49,6 +52,22 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await apiLogin(_emailCtrl.text.trim(), _passCtrl.text);
+
+// ===============================
+// 🔔 ENVOI DU TOKEN FCM AU BACKEND
+// ===============================
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+
+      if (fcmToken != null) {
+        final dio = await ApiClient.authed();
+
+        await dio.post(
+          "/save_fcm_token.php",
+          data: {
+            "fcm_token": fcmToken,
+          },
+        );
+      }
 
       setState(() {
         _successMsg = true;
@@ -116,9 +135,7 @@ class _LoginPageState extends State<LoginPage> {
                       themeCtrl.toggleTheme(false);
                     } else {
                       final brightness = WidgetsBinding
-                          .instance
-                          .platformDispatcher
-                          .platformBrightness;
+                          .instance.platformDispatcher.platformBrightness;
                       themeCtrl.toggleTheme(brightness == Brightness.dark);
                     }
                   },
@@ -169,7 +186,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   if (_message != null)
                     Text(
                       _message!,
@@ -179,9 +195,7 @@ class _LoginPageState extends State<LoginPage> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: _emailCtrl,
                     decoration: InputDecoration(
@@ -191,9 +205,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: _passCtrl,
                     obscureText: !_showPassword,
@@ -213,9 +225,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
                   SizedBox(
                     height: 50,
                     width: double.infinity,
@@ -238,7 +248,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                     ),
                   ),
-
                   TextButton(
                     onPressed: () => Navigator.push(
                       context,
@@ -248,7 +257,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     child: Text(t.forgot_password),
                   ),
-
                   TextButton(
                     onPressed: () => Navigator.push(
                       context,
