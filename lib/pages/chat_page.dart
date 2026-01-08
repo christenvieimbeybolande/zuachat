@@ -35,6 +35,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   static const primary = Color(0xFFFF0000);
+  final Map<int, GlobalKey> _messageKeys = {};
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
@@ -43,6 +44,7 @@ class _ChatPageState extends State<ChatPage> {
   // =========================
   final AudioRecorder _recorder = AudioRecorder();
   Map<String, dynamic>? _replyToMessage;
+  int? _highlightedMessageId;
 
   bool _isRecording = false;
   bool _isLocked = false;
@@ -144,6 +146,11 @@ class _ChatPageState extends State<ChatPage> {
       final msgs = List<Map<String, dynamic>>.from(raw);
 
       if (!mounted) return;
+      _messageKeys.removeWhere(
+        (key, _) => !msgs.any(
+          (m) => int.parse(m['id'].toString()) == key,
+        ),
+      );
 
       setState(() {
         _messages = msgs;
@@ -254,6 +261,33 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  void _scrollToMessage(int messageId) {
+    
+    final key = _messageKeys[messageId];
+    if (key == null) return;
+
+    final context = key.currentContext;
+    if (context == null) return;
+
+    setState(() {
+      _highlightedMessageId = messageId;
+    });
+
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      alignment: 0.3,
+    );
+
+    // 🔥 enlever le highlight après 800 ms
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted && _highlightedMessageId == messageId) {
+        setState(() => _highlightedMessageId = null);
+      }
+    });
+  }
+
   // ============================================================
   // ❌ AUDIO - CANCEL
   // ============================================================
@@ -332,25 +366,38 @@ class _ChatPageState extends State<ChatPage> {
   // 💬 Bulle message (dark / light)
   // ============================================================
   Widget _bubble(Map m) {
-    return Dismissible(
-      key: ValueKey('msg_${m['id']}'),
-      direction: DismissDirection.startToEnd, // 👉 swipe droite
-      confirmDismiss: (_) async {
-        setState(() {
-          _replyToMessage = Map<String, dynamic>.from(m);
-        });
-        return false; // ❌ ne pas supprimer
-      },
-      background: Container(
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 20),
-        child: const Icon(Icons.reply, color: Colors.grey),
+    final msgId = int.parse(m['id'].toString());
+
+    _messageKeys.putIfAbsent(
+      msgId,
+      () => GlobalKey(),
+    );
+
+    return Container(
+      key: _messageKeys[msgId],
+      child: Dismissible(
+        key: ValueKey('msg_${m['id']}'),
+        direction: DismissDirection.startToEnd,
+        confirmDismiss: (_) async {
+          setState(() {
+            _replyToMessage = Map<String, dynamic>.from(m);
+          });
+          return false;
+        },
+        background: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 20),
+          child: const Icon(Icons.reply, color: Colors.grey),
+        ),
+        child: _bubbleContent(m),
       ),
-      child: _bubbleContent(m),
     );
   }
 
   Widget _bubbleContent(Map m) {
+    final msgId = int.parse(m['id'].toString());
+    final isHighlighted = _highlightedMessageId == msgId;
+
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -448,7 +495,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: bgColor,
+            color: isHighlighted ? Colors.yellow.withOpacity(0.35) : bgColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -457,25 +504,32 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               // 🔁 MESSAGE RÉPONDU (AFFICHAGE)
               if (m['reply_to'] != null && m['reply_message'] != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border(
-                      left: BorderSide(color: primary, width: 3),
+                GestureDetector(
+                  onTap: () {
+                    if (m['reply_to'] != null) {
+                      _scrollToMessage(int.parse(m['reply_to'].toString()));
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(
+                        left: BorderSide(color: primary, width: 3),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    m['reply_type'] == 'audio'
-                        ? '🎤 Message audio'
-                        : (m['reply_message'] ?? ''),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black87,
+                    child: Text(
+                      m['reply_type'] == 'audio'
+                          ? '🎤 Message audio'
+                          : (m['reply_message'] ?? ''),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                 ),
