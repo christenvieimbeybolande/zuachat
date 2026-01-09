@@ -27,7 +27,7 @@ import 'theme/theme_controller.dart';
 import 'widgets/zua_loader.dart';
 
 /// 🔥 VERSION APP
-const String kAppVersion = "3.5.0";
+const String kAppVersion = "4.0.0";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =
