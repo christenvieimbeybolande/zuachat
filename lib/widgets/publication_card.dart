@@ -157,6 +157,24 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
   }
 
   // ---------- HELPERS ----------
+  String _getAuteurDisplayName(Map<String, dynamic> auteur) {
+    final prenom = (auteur['prenom'] ?? '').toString().trim();
+    final nom = (auteur['nom'] ?? '').toString().trim();
+    final postnom = (auteur['postnom'] ?? '').toString().trim();
+    final username = (auteur['username'] ?? '').toString().trim();
+    final type = (auteur['type_compte'] ?? 'personnel').toString();
+
+    if (prenom.isNotEmpty || nom.isNotEmpty || postnom.isNotEmpty) {
+      return "$prenom $nom $postnom".replaceAll(RegExp(r'\s+'), ' ').trim();
+    }
+
+    if (type == 'professionnel') {
+      return username.isNotEmpty ? username : nom;
+    }
+
+    return username.isNotEmpty ? username : 'Utilisateur';
+  }
+
   String _formatCount(int n) {
     if (n >= 1000000) {
       final v = (n / 1000000).toStringAsFixed(1);
@@ -542,10 +560,10 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
                           children: [
                             Flexible(
                               child: AutoSizeText(
-                                (auteur['nom'] ?? '').toString(),
+                                _getAuteurDisplayName(auteur),
                                 maxLines: 1,
-                                minFontSize: 12, // 🔥 taille minimum
-                                maxFontSize: 16, // 🔥 taille max
+                                minFontSize: 12,
+                                maxFontSize: 16,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context)
                                     .textTheme

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
 import '../gen_l10n/app_localizations.dart';
 
@@ -344,8 +345,12 @@ class _FriendsPageState extends State<FriendsPage> {
         title: Row(
           children: [
             Expanded(
-              child: Text(
+              child: AutoSizeText(
                 getDisplayName(u),
+                maxLines: 1, // 🔥 TOUJOURS 1 ligne
+                minFontSize: 12, // 🔥 taille min
+                maxFontSize: 16, // 🔥 taille max
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
@@ -390,7 +395,15 @@ class _FriendsPageState extends State<FriendsPage> {
       ),
       title: Row(
         children: [
-          Expanded(child: Text(getDisplayName(u))),
+          Expanded(
+            child: AutoSizeText(
+              getDisplayName(u),
+              maxLines: 1,
+              minFontSize: 12,
+              maxFontSize: 16,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           if (verified) VerifiedBadge.mini(isVerified: true),
         ],
       ),
