@@ -290,13 +290,11 @@ class _ProfilePageState extends State<ProfilePage>
 
     final user = _data!['user'] as Map<String, dynamic>;
 
-    final nomAffiche = user['type_compte'] == 'professionnel'
-        ? _s(user['nom'], 'Utilisateur')
-        : [
-            user['prenom'],
-            user['nom'],
-            user['postnom'],
-          ].map((e) => _s(e)).where((e) => e.isNotEmpty).join(' ').trim();
+    final nomAffiche = (user['type_compte'] == 'professionnel')
+        ? (user['nom'] ?? 'Utilisateur')
+        : "${user['prenom'] ?? ''} ${user['nom'] ?? ''} ${user['postnom'] ?? ''}"
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
 
     final username = _s(user['username']);
     final isVerified = (user['badge_verified'] == 1);

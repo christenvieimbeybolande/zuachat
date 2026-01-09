@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart'; // POUR Copier le texte
+import 'package:auto_size_text/auto_size_text.dart';
 
 import '../pages/comments_page.dart';
 import '../pages/profile_page.dart';
@@ -540,15 +541,18 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
                         child: Row(
                           children: [
                             Flexible(
-                                child: Text(
-                              (auteur['nom'] ?? '').toString(),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            )),
+                              child: AutoSizeText(
+                                (auteur['nom'] ?? '').toString(),
+                                maxLines: 1,
+                                minFontSize: 12, // 🔥 taille minimum
+                                maxFontSize: 16, // 🔥 taille max
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                            ),
                             if (auteur['badge_verified'] == 1 ||
                                 auteur['badge_verified'] == '1')
                               const Padding(

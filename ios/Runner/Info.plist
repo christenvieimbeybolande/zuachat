@@ -108,12 +108,5 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.</string>
 
-	<!-- Réseau -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-
 </dict>
 </plist>

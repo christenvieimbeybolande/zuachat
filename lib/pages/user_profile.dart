@@ -35,6 +35,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   bool _isFollowedBy = false;
   bool _isBlocked = false;
   bool _checkingBlock = true;
+  bool _blockedByMe = false;
 
   static const Color _primary = Color(0xFFFF0000);
   static const Color _bg = Color(0xFFF0F2F5);
@@ -58,6 +59,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       if (res.data['ok'] == true) {
         _isBlocked = res.data['blocked'] == true;
+        _blockedByMe = res.data['blocked_by_me'] == true;
       }
     } catch (_) {}
 
@@ -94,18 +96,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
             const SizedBox(height: 24),
 
             // 🔓 Bouton débloquer si c’est toi qui bloques
-            ElevatedButton(
-              onPressed: _unblockUser,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            if (_blockedByMe)
+              ElevatedButton(
+                onPressed: _unblockUser,
+                style: ElevatedButton.styleFrom(backgroundColor: _primary),
+                child: const Text(
+                  "Débloquer l’utilisateur",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
-              child: const Text(
-                "Débloquer l’utilisateur",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
           ],
         ),
       ),
