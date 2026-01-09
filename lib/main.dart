@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 
 // 🔥 FIREBASE
 import 'package:firebase_core/firebase_core.dart';
@@ -27,8 +24,11 @@ import 'theme/theme_controller.dart';
 // 🔄 Loader
 import 'widgets/zua_loader.dart';
 
+// 🌐 API
+import 'api/client.dart';
+
 /// 🔥 VERSION APP
-const String kAppVersion = "4.5.0";
+const String kAppVersion = "5.0.0";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =
@@ -49,7 +49,6 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Firebase INIT (OBLIGATOIRE AVEC FlutterFire)
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -58,7 +57,11 @@ Future<void> main() async {
 
   // 🔔 Local notifications init
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosInit = DarwinInitializationSettings();
+  const iosInit = DarwinInitializationSettings(
+    requestAlertPermission: true,
+    requestBadgePermission: true,
+    requestSoundPermission: true,
+  );
 
   const initSettings = InitializationSettings(
     android: androidInit,
@@ -99,12 +102,9 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
 
   if (storedVersion != kAppVersion) {
-    debugPrint("♻️ Migration $storedVersion → $kAppVersion");
-
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
-
     await prefs.setString('app_version', kAppVersion);
   }
 }
@@ -150,18 +150,42 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   @override
   void initState() {
     super.initState();
-    _initFCMPermissions();
+    _initFCM();
     _listenForegroundNotifications();
   }
 
   /// =========================================================
-  /// 🔔 FCM PERMISSIONS (iOS / Android 13+)
+  /// 🔔 INIT FCM (CORRECT)
   /// =========================================================
-  Future<void> _initFCMPermissions() async {
-    await FirebaseMessaging.instance.requestPermission(
+  Future<void> _initFCM() async {
+    final messaging = FirebaseMessaging.instance;
+
+    await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
+    );
+
+    // attendre APNs (iOS)
+    String? apnsToken;
+    for (int i = 0; i < 5; i++) {
+      apnsToken = await messaging.getAPNSToken();
+      if (apnsToken != null) break;
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    if (apnsToken == null) return;
+
+    final fcmToken = await messaging.getToken();
+    if (fcmToken == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('access_token') == null) return;
+
+    final dio = await ApiClient.authed();
+    await dio.post(
+      "/save_fcm_token.php",
+      data: {"fcm_token": fcmToken},
     );
   }
 
@@ -212,8 +236,6 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
-
-      // 🌍 Langue
       locale: locale.locale,
       supportedLocales: const [
         Locale('fr'),
@@ -226,13 +248,9 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-
-      // 🎨 Thème
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
-
-      // 🏠 Home
       home: FutureBuilder<bool>(
         future: _checkLogin(),
         builder: (context, snapshot) {

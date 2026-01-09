@@ -53,21 +53,8 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await apiLogin(_emailCtrl.text.trim(), _passCtrl.text);
 
-// ===============================
-// 🔔 ENVOI DU TOKEN FCM AU BACKEND
-// ===============================
-      final fcmToken = await FirebaseMessaging.instance.getToken();
 
-      if (fcmToken != null) {
-        final dio = await ApiClient.authed();
 
-        await dio.post(
-          "/save_fcm_token.php",
-          data: {
-            "fcm_token": fcmToken,
-          },
-        );
-      }
 
       setState(() {
         _successMsg = true;
