@@ -42,7 +42,6 @@
 	<!-- 📱 APPAREILS SUPPORTÉS -->
 	<!-- ===================== -->
 
-	<!-- iPhone ONLY (désactive totalement iPad) -->
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
@@ -58,7 +57,6 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 
-	<!-- Orientations iPhone -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -73,26 +71,44 @@
 	<true/>
 
 	<!-- ===================== -->
+	<!-- 🔔 FIREBASE / PUSH -->
+	<!-- ===================== -->
+
+	<!-- Firebase gère automatiquement AppDelegate -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+
+	<!-- Init automatique FCM -->
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<true/>
+
+	<!-- Notifications en arrière-plan -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- Description obligatoire pour iOS -->
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>ZuaChat utilise les notifications pour vous informer des messages, réactions et activités importantes.</string>
+
+	<!-- ===================== -->
 	<!-- 🔐 AUTORISATIONS APPLE -->
 	<!-- ===================== -->
 
-	<!-- 📸 Galerie -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à votre galerie pour partager des photos et vidéos.</string>
 
-	<!-- 💾 Sauvegarde -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>ZuaChat a besoin d’enregistrer des photos et vidéos dans votre galerie.</string>
 
-	<!-- 📷 Caméra -->
 	<key>NSCameraUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder à la caméra pour prendre des photos et vidéos.</string>
 
-	<!-- 🎤 Microphone -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.</string>
 
-	<!-- 🌐 Réseau -->
+	<!-- Réseau -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

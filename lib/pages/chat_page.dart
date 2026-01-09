@@ -11,6 +11,10 @@ import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
 import '../api/send_audio_message.dart';
 import '../api/delete_chat_message.dart';
+import '../api/report_message.dart';
+import '../api/block_user.dart';
+import '../api/is_blocked.dart';
+import '../api/unblock_user.dart';
 
 import '../widgets/chat_audio_bubble.dart';
 import '../pages/user_profile.dart';
@@ -49,6 +53,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isRecording = false;
   bool _isLocked = false;
   bool _isPaused = false;
+  bool _isBlocked = false;
 
   Duration _recordDuration = Duration.zero;
   Timer? _recordTimer;
@@ -105,10 +110,11 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
 
     _msgCtrl.addListener(() {
-      setState(() {}); // 🔥 force rebuild pour changer l’icône
+      setState(() {});
     });
 
     _load(initial: true);
+    _checkBlocked();
   }
 
   @override
@@ -118,6 +124,12 @@ class _ChatPageState extends State<ChatPage> {
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBlocked() async {
+    final blocked = await apiIsBlocked(widget.contactId);
+    if (!mounted) return;
+    setState(() => _isBlocked = blocked);
   }
 
   // ============================================================
@@ -337,6 +349,31 @@ class _ChatPageState extends State<ChatPage> {
                   Navigator.pop(context);
                 },
               ),
+// 🚨 SIGNALER MESSAGE (APPLE 1.2)
+            ListTile(
+              leading: const Icon(Icons.flag, color: Colors.orange),
+              title: const Text("Signaler ce message"),
+              onTap: () async {
+                Navigator.pop(context);
+
+                try {
+                  await apiReportMessage(
+                    messageId: msg['id'],
+                    reason: 'harassment',
+                  );
+
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Message signalé")),
+                  );
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Erreur lors du signalement")),
+                  );
+                }
+              },
+            ),
 
             // 🗑 SUPPRIMER POUR MOI
             ListTile(
@@ -719,6 +756,34 @@ class _ChatPageState extends State<ChatPage> {
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () => _load(scrollToEnd: false),
           ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) async {
+              if (value == 'block') {
+                await apiBlockUser(widget.contactId);
+                if (!mounted) return;
+                setState(() => _isBlocked = true);
+              }
+
+              if (value == 'unblock') {
+                await apiUnblockUser(widget.contactId);
+                if (!mounted) return;
+                setState(() => _isBlocked = false);
+              }
+            },
+            itemBuilder: (_) => [
+              if (!_isBlocked)
+                const PopupMenuItem(
+                  value: 'block',
+                  child: Text("Bloquer l’utilisateur"),
+                ),
+              if (_isBlocked)
+                const PopupMenuItem(
+                  value: 'unblock',
+                  child: Text("Débloquer l’utilisateur"),
+                ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -828,6 +893,31 @@ class _ChatPageState extends State<ChatPage> {
   // 📝 Input
   // ============================================================
   Widget _inputField() {
+    if (_isBlocked) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        color: Colors.grey.shade200,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Utilisateur bloqué",
+              style: TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(width: 12),
+            TextButton(
+              onPressed: () async {
+                await apiUnblockUser(widget.contactId);
+                if (!mounted) return;
+                setState(() => _isBlocked = false);
+              },
+              child: const Text("Débloquer"),
+            )
+          ],
+        ),
+      );
+    }
+
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

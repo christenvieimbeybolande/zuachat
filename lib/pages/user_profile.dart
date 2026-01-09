@@ -33,6 +33,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   bool _isFollowing = false;
   bool _isFollowedBy = false;
+  bool _isBlocked = false;
+  bool _checkingBlock = true;
 
   static const Color _primary = Color(0xFFFF0000);
   static const Color _bg = Color(0xFFF0F2F5);
@@ -43,6 +45,71 @@ class _UserProfilePageState extends State<UserProfilePage> {
   void initState() {
     super.initState();
     _loadProfile();
+    _checkBlocked();
+  }
+
+  Future<void> _checkBlocked() async {
+    try {
+      final dio = await _authed();
+      final res = await dio.get(
+        "/is_blocked.php",
+        queryParameters: {"user_id": widget.userId},
+      );
+
+      if (res.data['ok'] == true) {
+        _isBlocked = res.data['blocked'] == true;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _checkingBlock = false);
+    }
+  }
+
+  Widget _blockedProfileView(bool isDark) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 24),
+        child: Column(
+          children: [
+            Icon(
+              Icons.block,
+              size: 80,
+              color: Colors.grey.shade500,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Profil indisponible",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Vous ne pouvez pas voir le contenu de ce profil.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 🔓 Bouton débloquer si c’est toi qui bloques
+            ElevatedButton(
+              onPressed: _unblockUser,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
+                "Débloquer l’utilisateur",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadProfile() async {
@@ -55,9 +122,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
       final res = await fetchUserProfile(widget.userId);
 
       if (res['success'] == true) {
-        if (res['self'] == true) {
-          return; // évite confusion, on ne renvoie pas ProfilePage
-        }
+        if (res['self'] == true) return;
+
+        _isBlocked = res['blocked'] == true;
 
         _data = {'user': res['user'] ?? {}};
         _data!['publications'] = res['publications'] ?? [];
@@ -72,6 +139,40 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _blockUser() async {
+    try {
+      final dio = await _authed();
+      await dio.post("/block_user.php", data: {
+        "user_id": widget.userId,
+      });
+
+      if (!mounted) return;
+
+      setState(() => _isBlocked = true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Utilisateur bloqué")),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _unblockUser() async {
+    try {
+      final dio = await _authed();
+      await dio.post("/unblock_user.php", data: {
+        "user_id": widget.userId,
+      });
+
+      if (!mounted) return;
+
+      setState(() => _isBlocked = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Utilisateur débloqué")),
+      );
+    } catch (_) {}
   }
 
   // -------------------------- DOWNLOAD --------------------------
@@ -92,6 +193,47 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Erreur : $e")));
     }
+  }
+
+  void _reportUser() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Signaler ce profil"),
+        content: const Text(
+          "Ce profil sera signalé à l’équipe de modération.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _sendProfileReport();
+            },
+            child: const Text("Signaler"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendProfileReport() async {
+    try {
+      final dio = await _authed();
+      await dio.post("/report_user.php", data: {
+        "user_id": widget.userId,
+        "reason": "abuse",
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Profil signalé")),
+      );
+    } catch (_) {}
   }
 
   void _openViewer(String url) {
@@ -192,8 +334,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
     final cover = user['couverture'] ??
         "https://zuachat.com/assets/couverture-default.jpg";
 
-    final avatar = user['photo'] ??
-        "https://zuachat.com/assets/default-avatar.png";
+    final avatar =
+        user['photo'] ?? "https://zuachat.com/assets/default-avatar.png";
 
     final nom = (user['type_compte'] == "professionnel")
         ? user['nom']
@@ -217,6 +359,45 @@ class _UserProfilePageState extends State<UserProfilePage> {
               backgroundColor: _primary,
               elevation: 0,
               expandedHeight: MediaQuery.of(context).size.width * 9 / 16,
+
+              // =========================
+              // 🔘 MENU (⋮)
+              // =========================
+              actions: [
+                if (!_checkingBlock)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    onSelected: (value) async {
+                      if (value == 'block') {
+                        await _blockUser();
+                      } else if (value == 'unblock') {
+                        await _unblockUser();
+                      } else if (value == 'report') {
+                        _reportUser();
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (!_isBlocked)
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text("Bloquer l’utilisateur"),
+                        ),
+                      if (_isBlocked)
+                        const PopupMenuItem(
+                          value: 'unblock',
+                          child: Text("Débloquer l’utilisateur"),
+                        ),
+                      const PopupMenuItem(
+                        value: 'report',
+                        child: Text("Signaler ce profil"),
+                      ),
+                    ],
+                  ),
+              ],
+
+              // =========================
+              // 🎨 CONTENU VISUEL
+              // =========================
               flexibleSpace: LayoutBuilder(
                 builder: (context, cons) {
                   final raw = (cons.maxHeight - kToolbarHeight) /
@@ -228,7 +409,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     clipBehavior: Clip.none,
                     fit: StackFit.expand,
                     children: [
-                      // --- IMAGE COVER ---
+                      // --- IMAGE DE COUVERTURE ---
                       CachedNetworkImage(
                         imageUrl: cover,
                         fit: BoxFit.cover,
@@ -245,7 +426,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         ),
                       ),
 
-                      // --- GRADIENT EN BAS ---
+                      // --- GRADIENT BAS ---
                       Align(
                         alignment: Alignment.bottomCenter,
                         child: Container(
@@ -482,57 +663,63 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 ),
               ),
             ),
-
+            if (_isBlocked) _blockedProfileView(isDark),
             // -------------------------- TABS --------------------------
-            SliverToBoxAdapter(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _tab("Profil", Icons.grid_view, true, () {}),
-                  const SizedBox(width: 8),
-                  _tab("Albums", Icons.image, false, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            UserProfileAlbumsPage(userId: widget.userId),
-                      ),
-                    );
-                  }),
-                  const SizedBox(width: 8),
-                  _tab(
-                    "Réels",
-                    Icons.movie,
-                    false,
-                    () {
+            if (!_isBlocked)
+              SliverToBoxAdapter(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _tab("Profil", Icons.grid_view, true, () {}),
+                    const SizedBox(width: 8),
+                    _tab("Albums", Icons.image, false, () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => UserReelsPage(userId: widget.userId),
+                          builder: (_) =>
+                              UserProfileAlbumsPage(userId: widget.userId),
                         ),
                       );
-                    },
-                  ),
-                ],
+                    }),
+                    const SizedBox(width: 8),
+                    _tab(
+                      "Réels",
+                      Icons.movie,
+                      false,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                UserReelsPage(userId: widget.userId),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
 
             // -------------------------- PUBLICATIONS --------------------------
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
-                child: const Text("Ses publications",
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            if (!_isBlocked)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+                  child: const Text(
+                    "Ses publications",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
               ),
-            ),
-
-            if (pubs.isEmpty)
+            if (!_isBlocked && pubs.isEmpty)
               const SliverToBoxAdapter(
-                  child: Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Center(child: Text("Aucune publication."))))
-            else
+                child: Padding(
+                  padding: EdgeInsets.all(30),
+                  child: Center(child: Text("Aucune publication.")),
+                ),
+              ),
+
+            if (!_isBlocked && pubs.isNotEmpty)
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (ctx, i) => PublicationCard(

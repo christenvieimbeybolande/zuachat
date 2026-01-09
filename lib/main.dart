@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// 🔔 LOCAL NOTIFICATIONS (SON EN FOREGROUND)
+// 🔔 LOCAL NOTIFICATIONS (foreground sound)
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // 🌍 Localisation
@@ -26,7 +26,7 @@ import 'theme/theme_controller.dart';
 // 🔄 Loader
 import 'widgets/zua_loader.dart';
 
-/// 🔥 VERSION ACTUELLE
+/// 🔥 VERSION APP
 const String kAppVersion = "3.5.0";
 
 /// 🔔 Local notifications instance
@@ -50,9 +50,15 @@ Future<void> main() async {
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-  // 🔔 Init local notifications
+  // 🔔 Local notifications init (Android + iOS)
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const initSettings = InitializationSettings(android: androidInit);
+  const iosInit = DarwinInitializationSettings();
+
+  const initSettings = InitializationSettings(
+    android: androidInit,
+    iOS: iosInit,
+  );
+
   await localNotifications.initialize(initSettings);
 
   final prefs = await SharedPreferences.getInstance();
@@ -88,9 +94,11 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
 
   if (storedVersion != kAppVersion) {
     debugPrint("♻️ Migration $storedVersion → $kAppVersion");
+
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
+
     await prefs.setString('app_version', kAppVersion);
   }
 }
@@ -136,28 +144,23 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   @override
   void initState() {
     super.initState();
-    _initFCM();
+    _initFCMPermissions();
     _listenForegroundNotifications();
   }
 
   /// =========================================================
-  /// 🔔 INIT FCM + ENVOI TOKEN BACKEND
+  /// 🔔 FCM PERMISSIONS (iOS / Android 13+)
   /// =========================================================
-  Future<void> _initFCM() async {
-    final fcm = FirebaseMessaging.instance;
-
-    await fcm.requestPermission(alert: true, badge: true, sound: true);
-
-    final token = await fcm.getToken();
-    debugPrint("🔔 FCM TOKEN: $token");
-
-    if (token != null) {
-      await _sendFcmTokenToBackend(token);
-    }
+  Future<void> _initFCMPermissions() async {
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
   }
 
   /// =========================================================
-  /// 🔔 NOTIFICATION + SON EN FOREGROUND
+  /// 🔔 FOREGROUND NOTIFICATION (SON + BANNIÈRE)
   /// =========================================================
   void _listenForegroundNotifications() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -176,32 +179,14 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
             priority: Priority.high,
             playSound: true,
           ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
       );
     });
-  }
-
-  /// =========================================================
-  /// 🔗 ENVOI TOKEN AU BACKEND
-  /// =========================================================
-  Future<void> _sendFcmTokenToBackend(String token) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final accessToken = prefs.getString('access_token');
-
-      if (accessToken == null || accessToken.isEmpty) return;
-
-      await http.post(
-        Uri.parse('https://zuachat.com/api/save_fcm_token.php'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'fcm_token': token}),
-      );
-    } catch (e) {
-      debugPrint("❌ Erreur envoi FCM: $e");
-    }
   }
 
   /// =========================================================
@@ -221,6 +206,8 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
+
+      // 🌍 Langue
       locale: locale.locale,
       supportedLocales: const [
         Locale('fr'),
@@ -233,9 +220,13 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+
+      // 🎨 Thème
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
+
+      // 🏠 Home
       home: FutureBuilder<bool>(
         future: _checkLogin(),
         builder: (context, snapshot) {
@@ -246,6 +237,7 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
               ),
             );
           }
+
           return snapshot.data! ? const FeedPage() : const LoginPage();
         },
       ),

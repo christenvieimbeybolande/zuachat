@@ -213,6 +213,33 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
     );
   }
 
+  Future<void> _reportPublication() async {
+    try {
+      final dio = await widget.authedDio();
+      final res = await dio.post(
+        '/report_message.php',
+        data: {
+          'message_id': _pubSnapshot['id'],
+          'reason': 'abuse',
+        },
+      );
+
+      if (res.data['ok'] == true) {
+        Fluttertoast.showToast(msg: "🚩 Publication signalée");
+      } else {
+        Fluttertoast.showToast(
+          msg: res.data['error'] ?? "Erreur signalement",
+          backgroundColor: Colors.red,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Erreur réseau",
+        backgroundColor: Colors.red,
+      );
+    }
+  }
+
   Future<void> _deletePublication() async {
     try {
       final dio = await widget.authedDio();
@@ -756,6 +783,8 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
       onSelected: (value) async {
         if (value == 'delete') await _deletePublication();
         if (value == 'hide') await _maskPublication();
+        if (value == 'report') await _reportPublication();
+
         if (value == 'save') {
           showModalBottomSheet(
               context: context,
@@ -798,6 +827,16 @@ class _PublicationCardInnerState extends State<_PublicationCardInner>
                 SizedBox(width: 8),
                 Text("Masquer")
               ])),
+          const PopupMenuItem(
+            value: 'report',
+            child: Row(
+              children: [
+                Icon(Icons.flag_outlined, color: Colors.orange),
+                SizedBox(width: 8),
+                Text("Signaler"),
+              ],
+            ),
+          ),
           const PopupMenuItem(
               value: 'save',
               child: Row(children: [
