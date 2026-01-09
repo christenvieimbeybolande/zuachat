@@ -8,8 +8,9 @@ import 'package:http/http.dart' as http;
 // 🔥 FIREBASE
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 
-// 🔔 LOCAL NOTIFICATIONS (foreground sound)
+// 🔔 LOCAL NOTIFICATIONS
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // 🌍 Localisation
@@ -37,7 +38,9 @@ final FlutterLocalNotificationsPlugin localNotifications =
 /// 🔔 FCM BACKGROUND HANDLER
 /// =========================================================
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 }
 
 /// =========================================================
@@ -46,11 +49,14 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Firebase
-  await Firebase.initializeApp();
+  // 🔥 Firebase INIT (OBLIGATOIRE AVEC FlutterFire)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-  // 🔔 Local notifications init (Android + iOS)
+  // 🔔 Local notifications init
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   const iosInit = DarwinInitializationSettings();
 
@@ -160,7 +166,7 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   }
 
   /// =========================================================
-  /// 🔔 FOREGROUND NOTIFICATION (SON + BANNIÈRE)
+  /// 🔔 FOREGROUND NOTIFICATION
   /// =========================================================
   void _listenForegroundNotifications() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -237,7 +243,6 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
               ),
             );
           }
-
           return snapshot.data! ? const FeedPage() : const LoginPage();
         },
       ),
