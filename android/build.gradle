@@ -1,11 +1,16 @@
 buildscript {
     ext.kotlin_version = '1.9.25'
+
     repositories {
         google()
         mavenCentral()
     }
+
     dependencies {
+        // 🔧 ANDROID GRADLE PLUGIN
         classpath 'com.android.tools.build:gradle:8.6.0'
+
+        // 🧠 KOTLIN
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // 🔥 FIREBASE GOOGLE SERVICES (OBLIGATOIRE)
@@ -20,16 +25,19 @@ allprojects {
     }
 }
 
+// 📦 Dossier build commun
 rootProject.buildDir = "../build"
 
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
+// ⚠️ Important pour Flutter
 subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// 🧹 CLEAN
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
