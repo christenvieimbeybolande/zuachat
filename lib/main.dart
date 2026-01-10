@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,15 +30,16 @@ import 'widgets/zua_loader.dart';
 import 'api/client.dart';
 
 /// 🔥 VERSION APP
-const String kAppVersion = "5.0.0";
+const String kAppVersion = "4.5.0";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =
     FlutterLocalNotificationsPlugin();
 
 /// =========================================================
-/// 🔔 FCM BACKGROUND HANDLER
+/// 🔔 FCM BACKGROUND HANDLER (ANDROID RELEASE SAFE)
 /// =========================================================
+@pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -69,6 +72,19 @@ Future<void> main() async {
   );
 
   await localNotifications.initialize(initSettings);
+
+  // 🔔 ANDROID NOTIFICATION CHANNEL (OBLIGATOIRE)
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'zuachat_default',
+    'ZuaChat Notifications',
+    description: 'Notifications ZuaChat',
+    importance: Importance.high,
+  );
+
+  await localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
 
   final prefs = await SharedPreferences.getInstance();
   await _migrateIfNeeded(prefs);
@@ -155,7 +171,7 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   }
 
   /// =========================================================
-  /// 🔔 INIT FCM (CORRECT)
+  /// 🔔 INIT FCM (ANDROID + IOS SAFE)
   /// =========================================================
   Future<void> _initFCM() async {
     final messaging = FirebaseMessaging.instance;
@@ -166,15 +182,16 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
       sound: true,
     );
 
-    // attendre APNs (iOS)
-    String? apnsToken;
-    for (int i = 0; i < 5; i++) {
-      apnsToken = await messaging.getAPNSToken();
-      if (apnsToken != null) break;
-      await Future.delayed(const Duration(seconds: 1));
+    // 🔥 APNs UNIQUEMENT SUR iOS
+    if (Platform.isIOS) {
+      String? apnsToken;
+      for (int i = 0; i < 5; i++) {
+        apnsToken = await messaging.getAPNSToken();
+        if (apnsToken != null) break;
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      if (apnsToken == null) return;
     }
-
-    if (apnsToken == null) return;
 
     final fcmToken = await messaging.getToken();
     if (fcmToken == null) return;
