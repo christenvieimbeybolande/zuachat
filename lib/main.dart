@@ -1,15 +1,15 @@
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 // 🔥 FIREBASE
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'firebase_options.dart';
 
-// 🔔 LOCAL NOTIFICATIONS
+// 🔔 LOCAL NOTIFICATIONS (foreground sound)
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // 🌍 Localisation
@@ -26,9 +26,6 @@ import 'theme/theme_controller.dart';
 // 🔄 Loader
 import 'widgets/zua_loader.dart';
 
-// 🌐 API
-import 'api/client.dart';
-
 /// 🔥 VERSION APP
 const String kAppVersion = "5.1.1";
 
@@ -37,13 +34,10 @@ final FlutterLocalNotificationsPlugin localNotifications =
     FlutterLocalNotificationsPlugin();
 
 /// =========================================================
-/// 🔔 FCM BACKGROUND HANDLER (ANDROID RELEASE SAFE)
+/// 🔔 FCM BACKGROUND HANDLER
 /// =========================================================
-@pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp();
 }
 
 /// =========================================================
@@ -52,19 +46,13 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
+  // 🔥 Firebase
+  await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-  // 🔔 Local notifications init
+  // 🔔 Local notifications init (Android + iOS)
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosInit = DarwinInitializationSettings(
-    requestAlertPermission: true,
-    requestBadgePermission: true,
-    requestSoundPermission: true,
-  );
+  const iosInit = DarwinInitializationSettings();
 
   const initSettings = InitializationSettings(
     android: androidInit,
@@ -72,19 +60,6 @@ Future<void> main() async {
   );
 
   await localNotifications.initialize(initSettings);
-
-  // 🔔 ANDROID NOTIFICATION CHANNEL (OBLIGATOIRE)
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'zuachat_default',
-    'ZuaChat Notifications',
-    description: 'Notifications ZuaChat',
-    importance: Importance.high,
-  );
-
-  await localNotifications
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
 
   final prefs = await SharedPreferences.getInstance();
   await _migrateIfNeeded(prefs);
@@ -118,9 +93,12 @@ Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
 
   if (storedVersion != kAppVersion) {
+    debugPrint("♻️ Migration $storedVersion → $kAppVersion");
+
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('current_session_id');
+
     await prefs.setString('app_version', kAppVersion);
   }
 }
@@ -166,48 +144,23 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   @override
   void initState() {
     super.initState();
-    _initFCM();
+    _initFCMPermissions();
     _listenForegroundNotifications();
   }
 
   /// =========================================================
-  /// 🔔 INIT FCM (ANDROID + IOS SAFE)
+  /// 🔔 FCM PERMISSIONS (iOS / Android 13+)
   /// =========================================================
-  Future<void> _initFCM() async {
-    final messaging = FirebaseMessaging.instance;
-
-    await messaging.requestPermission(
+  Future<void> _initFCMPermissions() async {
+    await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
-
-    // 🔥 APNs UNIQUEMENT SUR iOS
-    if (Platform.isIOS) {
-      String? apnsToken;
-      for (int i = 0; i < 5; i++) {
-        apnsToken = await messaging.getAPNSToken();
-        if (apnsToken != null) break;
-        await Future.delayed(const Duration(seconds: 1));
-      }
-      if (apnsToken == null) return;
-    }
-
-    final fcmToken = await messaging.getToken();
-    if (fcmToken == null) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString('access_token') == null) return;
-
-    final dio = await ApiClient.authed();
-    await dio.post(
-      "/save_fcm_token.php",
-      data: {"fcm_token": fcmToken},
-    );
   }
 
   /// =========================================================
-  /// 🔔 FOREGROUND NOTIFICATION
+  /// 🔔 FOREGROUND NOTIFICATION (SON + BANNIÈRE)
   /// =========================================================
   void _listenForegroundNotifications() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -253,6 +206,8 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
+
+      // 🌍 Langue
       locale: locale.locale,
       supportedLocales: const [
         Locale('fr'),
@@ -265,9 +220,13 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+
+      // 🎨 Thème
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
+
+      // 🏠 Home
       home: FutureBuilder<bool>(
         future: _checkLogin(),
         builder: (context, snapshot) {
@@ -278,6 +237,7 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
               ),
             );
           }
+
           return snapshot.data! ? const FeedPage() : const LoginPage();
         },
       ),
