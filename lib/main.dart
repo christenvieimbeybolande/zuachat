@@ -30,7 +30,7 @@ import 'widgets/zua_loader.dart';
 import 'api/client.dart';
 
 /// 🔥 VERSION APP
-const String kAppVersion = "4.5.0";
+const String kAppVersion = "5.1.1";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =
