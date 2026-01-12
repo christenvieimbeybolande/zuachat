@@ -44,7 +44,8 @@
 
 	<key>UIDeviceFamily</key>
 	<array>
-		<integer>1</integer>
+		<integer>1</integer> <!-- iPhone -->
+		<integer>2</integer> <!-- iPad -->
 	</array>
 
 	<!-- ===================== -->
@@ -57,9 +58,20 @@
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 
+	<!-- iPhone -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- iPad (OBLIGATOIRE POUR MULTITÂCHE) -->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
@@ -74,50 +86,35 @@
 	<!-- 🔔 FIREBASE / PUSH -->
 	<!-- ===================== -->
 
-	<!-- Firebase gère automatiquement AppDelegate -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 
-	<!-- Init automatique FCM -->
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<true/>
 
-	<!-- Notifications en arrière-plan -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 	</array>
 
-	<!-- Description obligatoire pour iOS -->
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>
-		ZuaChat utilise les notifications pour vous informer des messages,
-		réactions et activités importantes.
-	</string>
+	<string>ZuaChat utilise les notifications pour vous informer des messages, réactions et activités importantes.</string>
 
 	<!-- ===================== -->
-	<!-- 🔐 AUTORISATIONS APPLE -->
+	<!-- 🔐 AUTORISATIONS -->
 	<!-- ===================== -->
 
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>
-		ZuaChat a besoin d’accéder à votre galerie pour partager des photos et vidéos.
-	</string>
+	<string>ZuaChat a besoin d’accéder à votre galerie pour partager des photos et vidéos.</string>
 
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>
-		ZuaChat a besoin d’enregistrer des photos et vidéos dans votre galerie.
-	</string>
+	<string>ZuaChat a besoin d’enregistrer des photos et vidéos dans votre galerie.</string>
 
 	<key>NSCameraUsageDescription</key>
-	<string>
-		ZuaChat a besoin d’accéder à la caméra pour prendre des photos et vidéos.
-	</string>
+	<string>ZuaChat a besoin d’accéder à la caméra pour prendre des photos et vidéos.</string>
 
 	<key>NSMicrophoneUsageDescription</key>
-	<string>
-		ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.
-	</string>
+	<string>ZuaChat a besoin d’accéder au microphone pour enregistrer des messages vocaux.</string>
 
 </dict>
 </plist>
