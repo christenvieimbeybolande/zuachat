@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/auth_signup.dart';
 import '../api/auth_email_verif.dart'; // 🔥 nouveau
@@ -44,6 +45,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
   String? _message;
   bool _showPassword = false;
   bool _returnToSummary = false; // 🔁 revenir auto à l’étape résumé
+  bool _termsAccepted = false;
 
   // Controllers
   final _birthCtrl = TextEditingController();
@@ -331,7 +333,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
 
       setState(() {
         _emailVerified = true;
-        _message = "Email vérifié avec succès ✅";
+        _message = "Email vérifié avec succès";
         _step = 6; // aller au résumé
       });
     } catch (e) {
@@ -351,6 +353,14 @@ class _SignupUserPageState extends State<SignupUserPage> {
   Future<void> _submit() async {
     // Ici, on est en étape 6 (résumé)
     // On vérifie quand même l’email
+    if (!_termsAccepted) {
+      setState(() {
+        _message =
+            "Vous devez accepter les Conditions d’utilisation et la Politique de confidentialité.";
+      });
+      return;
+    }
+
     if (!_emailVerified) {
       setState(() {
         _message = "Veuillez vérifier votre email avant de créer le compte.";
@@ -898,6 +908,74 @@ class _SignupUserPageState extends State<SignupUserPage> {
           "Si tout est correct, cliquez sur « Créer mon compte » pour continuer.",
           style: TextStyle(fontSize: 13),
         ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Checkbox(
+              value: _termsAccepted,
+              onChanged: (v) {
+                setState(() {
+                  _termsAccepted = v ?? false;
+                });
+              },
+            ),
+            Expanded(
+              child: Wrap(
+                children: [
+                  const Text(
+                    "J’accepte les ",
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      final uri = Uri.parse(
+                        "https://aide.zuachat.com/conditions.php",
+                      );
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                      }
+                    },
+                    child: const Text(
+                      "Conditions d’utilisation",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color.fromARGB(255, 255, 0, 0),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                  const Text(" et la ", style: TextStyle(fontSize: 13)),
+                  GestureDetector(
+                    onTap: () async {
+                      final uri = Uri.parse(
+                        "https://aide.zuachat.com/politique.php",
+                      );
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                      }
+                    },
+                    child: const Text(
+                      "Politique de confidentialité",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color.fromARGB(255, 255, 0, 0),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                  const Text(".", style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1021,7 +1099,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _loading
+                      onPressed: _loading || (_step == 6 && !_termsAccepted)
                           ? null
                           : () async {
                               await _nextOrSubmit();

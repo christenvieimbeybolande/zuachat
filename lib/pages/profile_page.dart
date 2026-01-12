@@ -620,8 +620,10 @@ class _ProfilePageState extends State<ProfilePage>
                             _infoItem(Icons.email, email),
                             _infoItem(Icons.phone, tel),
                             _infoItem(Icons.flag, pays),
-                            _infoItem(Icons.wc, sexe),
-                            _infoItem(Icons.cake, dob),
+                            if (typeCompte != 'professionnel')
+                              _infoItem(Icons.wc, sexe),
+                            if (typeCompte != 'professionnel')
+                              _infoItem(Icons.cake, dob),
                             _infoItem(Icons.color_lens, "Thème : $theme"),
                             _infoItem(
                                 Icons.account_circle, "Type : $typeCompte"),

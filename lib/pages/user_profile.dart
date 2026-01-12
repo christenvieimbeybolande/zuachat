@@ -328,6 +328,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     final user = _data!['user'];
+    final typeCompte = user['type_compte'] ?? 'personnel';
     final pubs = List<Map<String, dynamic>>.from(_data!['publications'] ?? []);
 
     final cover = user['couverture'] ??
@@ -647,14 +648,23 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         _infoGrid([
                           _infoItem(Icons.phone, user['telephone'] ?? ""),
                           _infoItem(Icons.flag, user['pays'] ?? ""),
-                          _infoItem(Icons.wc, user['sexe'] ?? ""),
-                          _infoItem(Icons.cake, user['date_naissance'] ?? ""),
-                          _infoItem(Icons.account_circle,
-                              "Type : ${user['type_compte'] ?? ''}"),
-                          if (user['type_compte'] == "professionnel" &&
+
+                          // 🔒 Sexe UNIQUEMENT pour comptes personnels
+                          if (typeCompte != 'professionnel')
+                            _infoItem(Icons.wc, user['sexe'] ?? ""),
+
+                          // 🔒 Date de naissance UNIQUEMENT pour comptes personnels
+                          if (typeCompte != 'professionnel')
+                            _infoItem(Icons.cake, user['date_naissance'] ?? ""),
+
+                          _infoItem(Icons.account_circle, "Type : $typeCompte"),
+
+                          if (typeCompte == "professionnel" &&
                               (user['categorie'] ?? "").toString().isNotEmpty)
-                            _infoItem(Icons.business_center,
-                                "Catégorie : ${user['categorie']}"),
+                            _infoItem(
+                              Icons.business_center,
+                              "Catégorie : ${user['categorie']}",
+                            ),
                         ]),
                       ],
                     ),
