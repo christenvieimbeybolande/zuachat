@@ -242,4 +242,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get error_select_country => 'Veuillez sélectionner un pays';
+
+  @override
+  String get notification => 'Notification';
+
+  @override
+  String get notif_admin => 'Official ZuaChat message';
+
+  @override
+  String get notif_admin_label => 'ZuaChat';
 }

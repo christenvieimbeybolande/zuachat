@@ -10,6 +10,7 @@ import '../gen_l10n/app_localizations.dart';
 
 import 'feed_page.dart';
 import 'single_publication_page.dart';
+import 'admin_notification_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -73,6 +74,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
   // =========================================================
   void _openNotification(dynamic n) {
     final String type = (n['type'] ?? '').toString();
+
+    // 🔔 ADMIN CUSTOM
+    if (type == 'admin_custom') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminNotificationPage(notification: n),
+        ),
+      );
+      return;
+    }
 
     final int? publicationId = n['publication_id'] == null
         ? null
@@ -296,6 +308,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         return t.notif_badge_refuse;
       case 'badge_removed':
         return t.notif_badge_removed;
+      case 'admin_custom':
+        return t.notif_admin;
       default:
         return t.notif_default;
     }

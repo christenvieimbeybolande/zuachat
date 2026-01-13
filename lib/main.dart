@@ -18,6 +18,7 @@ import 'gen_l10n/app_localizations.dart';
 // 📄 Pages
 import 'pages/login_page.dart';
 import 'pages/feed_page.dart';
+import 'pages/app_update_page.dart';
 
 // 🎨 Thème
 import 'theme/theme_controller.dart';
@@ -27,8 +28,9 @@ import 'widgets/zua_loader.dart';
 
 // 🌐 API
 import 'api/client.dart';
+import 'api/app_update_check.dart';
 
-/// 🔥 VERSION APP
+/// 🔥 VERSION APP (AFFICHAGE UNIQUEMENT)
 const String kAppVersion = "5.5.1";
 
 /// 🔔 Local notifications instance
@@ -49,7 +51,7 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔥 Firebase (SANS firebase_options.dart)
+  // 🔥 Firebase
   await Firebase.initializeApp();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
@@ -95,7 +97,7 @@ Future<void> main() async {
 }
 
 /// =========================================================
-/// 🔄 MIGRATION
+/// 🔄 MIGRATION (NE TOUCHE PAS)
 /// =========================================================
 Future<void> _migrateIfNeeded(SharedPreferences prefs) async {
   final storedVersion = prefs.getString('app_version');
@@ -146,15 +148,41 @@ class ZuaChatApp extends StatefulWidget {
 }
 
 class _ZuaChatAppState extends State<ZuaChatApp> {
+  bool _updateChecked = false;
+  Widget? _forcedPage;
+
   @override
   void initState() {
     super.initState();
+    _checkUpdate();
     _initFCM();
     _listenForegroundNotifications();
   }
 
   /// =========================================================
-  /// 🔔 INIT FCM (ANDROID + IOS SAFE)
+  /// 🔄 CHECK UPDATE (ANDROID ONLY)
+  /// =========================================================
+  Future<void> _checkUpdate() async {
+    final data = await AppUpdateCheck.check();
+
+    if (!mounted) return;
+
+    if (data != null && data['update_required'] == true) {
+      setState(() {
+        _forcedPage = AppUpdatePage(
+          message: data['message'],
+          storeUrl: data['store_url'],
+          force: data['force_update'] == true,
+        );
+        _updateChecked = true;
+      });
+    } else {
+      setState(() => _updateChecked = true);
+    }
+  }
+
+  /// =========================================================
+  /// 🔔 INIT FCM
   /// =========================================================
   Future<void> _initFCM() async {
     final messaging = FirebaseMessaging.instance;
@@ -165,7 +193,6 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
       sound: true,
     );
 
-    // 🔥 APNs UNIQUEMENT iOS
     if (Platform.isIOS) {
       String? apnsToken;
       for (int i = 0; i < 5; i++) {
@@ -183,14 +210,11 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     if (prefs.getString('access_token') == null) return;
 
     final dio = await ApiClient.authed();
-    await dio.post(
-      "/save_fcm_token.php",
-      data: {"fcm_token": fcmToken},
-    );
+    await dio.post("/save_fcm_token.php", data: {"fcm_token": fcmToken});
   }
 
   /// =========================================================
-  /// 🔔 FOREGROUND NOTIFICATION
+  /// 🔔 FOREGROUND NOTIFICATIONS
   /// =========================================================
   void _listenForegroundNotifications() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -233,6 +257,17 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
     final theme = context.watch<ThemeController>();
     final locale = context.watch<LocaleController>();
 
+    if (!_updateChecked) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: ZuaLoader(looping: true, size: 64),
+          ),
+        ),
+      );
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: "ZuaChat",
@@ -251,19 +286,20 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
-      home: FutureBuilder<bool>(
-        future: _checkLogin(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Scaffold(
-              body: Center(
-                child: ZuaLoader(looping: true, size: 64),
-              ),
-            );
-          }
-          return snapshot.data! ? const FeedPage() : const LoginPage();
-        },
-      ),
+      home: _forcedPage ??
+          FutureBuilder<bool>(
+            future: _checkLogin(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Scaffold(
+                  body: Center(
+                    child: ZuaLoader(looping: true, size: 64),
+                  ),
+                );
+              }
+              return snapshot.data! ? const FeedPage() : const LoginPage();
+            },
+          ),
     );
   }
 }

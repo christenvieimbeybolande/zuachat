@@ -64,7 +64,7 @@ import 'app_localizations_fr.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -87,17 +87,17 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
     Locale('es'),
-    Locale('fr'),
+    Locale('fr')
   ];
 
   /// No description provided for @settings.
@@ -567,6 +567,24 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Veuillez sélectionner un pays'**
   String get error_select_country;
+
+  /// No description provided for @notification.
+  ///
+  /// In fr, this message translates to:
+  /// **'Notification'**
+  String get notification;
+
+  /// No description provided for @notif_admin.
+  ///
+  /// In fr, this message translates to:
+  /// **'Message officiel de ZuaChat'**
+  String get notif_admin;
+
+  /// No description provided for @notif_admin_label.
+  ///
+  /// In fr, this message translates to:
+  /// **'ZuaChat'**
+  String get notif_admin_label;
 }
 
 class _AppLocalizationsDelegate
@@ -598,9 +616,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-    'an issue with the localizations generation tool. Please file an issue '
-    'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
-  );
+      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+      'an issue with the localizations generation tool. Please file an issue '
+      'on GitHub with a reproducible sample app and the gen-l10n configuration '
+      'that was used.');
 }

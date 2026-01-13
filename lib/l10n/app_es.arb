@@ -83,4 +83,9 @@
   "friends_followers": "seguidores",
   "friends_following": "siguiendo",
   "friends_suggestion": "Sugerencia"
+  ,
+  "notification": "Notification",
+  "notif_admin": "Official ZuaChat message",
+  "notif_admin_label": "ZuaChat"
+
 }

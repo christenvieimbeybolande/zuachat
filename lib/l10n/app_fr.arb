@@ -96,4 +96,9 @@
 
   "error_email_required": "Email obligatoire",
   "error_select_country": "Veuillez sélectionner un pays"
+  ,
+  "notification": "Notification",
+  "notif_admin": "Message officiel de ZuaChat",
+  "notif_admin_label": "ZuaChat"
+
 }
