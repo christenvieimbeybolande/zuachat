@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppUpdatePage extends StatelessWidget {
   final String message;
@@ -33,7 +34,6 @@ class AppUpdatePage extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(message, textAlign: TextAlign.center),
                 const SizedBox(height: 30),
-
                 ElevatedButton(
                   onPressed: () {
                     launchUrl(
@@ -43,11 +43,14 @@ class AppUpdatePage extends StatelessWidget {
                   },
                   child: const Text("Mettre à jour"),
                 ),
-
                 if (!force) ...[
                   const SizedBox(height: 14),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('ignore_update', true);
+                      Navigator.pop(context);
+                    },
                     child: const Text("Fermer"),
                   ),
                 ],

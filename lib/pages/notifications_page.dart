@@ -75,7 +75,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void _openNotification(dynamic n) {
     final String type = (n['type'] ?? '').toString();
 
-    // 🔔 ADMIN CUSTOM
+    // 🔔 CAS ADMIN
     if (type == 'admin_custom') {
       Navigator.push(
         context,
@@ -86,6 +86,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       return;
     }
 
+    // 📄 CAS PUBLICATION
     final int? publicationId = n['publication_id'] == null
         ? null
         : int.tryParse(n['publication_id'].toString());

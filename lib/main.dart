@@ -162,23 +162,48 @@ class _ZuaChatAppState extends State<ZuaChatApp> {
   /// =========================================================
   /// 🔄 CHECK UPDATE (ANDROID ONLY)
   /// =========================================================
+  /// =========================================================
+  /// 🔄 CHECK UPDATE (ANDROID ONLY)
+  /// =========================================================
   Future<void> _checkUpdate() async {
-    final data = await AppUpdateCheck.check();
+    final prefs = await SharedPreferences.getInstance();
 
+    // 🔐 L’utilisateur a déjà ignoré une update non forcée
+    final bool ignoreUpdate = prefs.getBool('ignore_update') ?? false;
+
+    final data = await AppUpdateCheck.check();
     if (!mounted) return;
 
-    if (data != null && data['update_required'] == true) {
+    // ❌ Aucune info update
+    if (data == null) {
+      setState(() => _updateChecked = true);
+      return;
+    }
+
+    final bool updateRequired = data['update_required'] == true;
+    final bool forceUpdate = data['force_update'] == true;
+
+    // ⛔ UPDATE NON FORCÉE + DÉJÀ IGNORÉE
+    if (updateRequired && !forceUpdate && ignoreUpdate) {
+      setState(() => _updateChecked = true);
+      return;
+    }
+
+    // 🚨 UPDATE À AFFICHER
+    if (updateRequired) {
       setState(() {
         _forcedPage = AppUpdatePage(
           message: data['message'],
           storeUrl: data['store_url'],
-          force: data['force_update'] == true,
+          force: forceUpdate,
         );
         _updateChecked = true;
       });
-    } else {
-      setState(() => _updateChecked = true);
+      return;
     }
+
+    // ✅ PAS D’UPDATE
+    setState(() => _updateChecked = true);
   }
 
   /// =========================================================
