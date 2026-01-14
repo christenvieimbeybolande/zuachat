@@ -301,57 +301,71 @@ class _SignupUserPageState extends State<SignupUserPage> {
   // ============================================================
   // 🔥 VÉRIFICATION DU CODE (étape 5)
   // ============================================================
-  Future<void> _verifyEmailStep() async {
-    if (_pendingEmail == null || _pendingEmail!.isEmpty) {
-      setState(() {
-        _message = "Email introuvable, veuillez revenir à l’étape 4.";
-      });
-      setState(() {
-        _step = 4;
-      });
-      return;
-    }
+Future<void> _verifyEmailStep() async {
+  if (_pendingEmail == null || _pendingEmail!.isEmpty) {
+    if (!mounted) return;
+    setState(() {
+      _message = "Email introuvable, veuillez revenir à l’étape précédente.";
+      _step = 4;
+    });
+    return;
+  }
 
-    final code = _codeCtrl.text.trim();
-    if (code.isEmpty) {
-      setState(() {
-        _message = "Veuillez entrer le code reçu par email.";
-      });
-      return;
-    }
+  final code = _codeCtrl.text.trim();
+  if (code.isEmpty) {
+    setState(() {
+      _message = "Veuillez entrer le code reçu par email.";
+    });
+    return;
+  }
 
-    if (_remainingSeconds == 0) {
-      setState(() {
-        _message = "Le code a expiré, veuillez renvoyer un nouveau code.";
-      });
-      return;
-    }
+  if (_remainingSeconds == 0) {
+    setState(() {
+      _message = "Le code a expiré, veuillez renvoyer un nouveau code.";
+    });
+    return;
+  }
+
+  setState(() {
+    _loading = true;
+    _message = null;
+  });
+
+  try {
+    await apiVerifyEmailCode(_pendingEmail!, code).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw Exception(
+          "Impossible de vérifier le code. Vérifiez votre connexion.",
+        );
+      },
+    );
+
+    if (!mounted) return;
+    _timer?.cancel();
 
     setState(() {
-      _loading = true;
-      _message = null;
+      _loading = false;
+      _emailVerified = true;
+      _message = "Email vérifié avec succès";
+      _step = 6;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _loading = false;
+      _message = e.toString().replaceFirst('Exception: ', '');
     });
 
-    try {
-      await apiVerifyEmailCode(_pendingEmail!, code);
-
-      _timer?.cancel();
-
-      setState(() {
-        _emailVerified = true;
-        _message = "Email vérifié avec succès";
-        _step = 6; // aller au résumé
-      });
-    } catch (e) {
-      setState(() {
-        _message = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
-      setState(() {
-        _loading = false;
-      });
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_message!),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
 
   // ============================================================
   // SOUMISSION FINALE
