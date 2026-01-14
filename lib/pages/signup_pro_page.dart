@@ -213,7 +213,16 @@ class _SignupProPageState extends State<SignupProPage> {
     });
 
     try {
-      await apiSendEmailCode(email);
+      await apiSendEmailCode(email).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception(
+            "Temps d’attente dépassé. Vérifiez votre connexion internet.",
+          );
+        },
+      );
+
+      if (!mounted) return;
 
       setState(() {
         _pendingEmail = email;
@@ -224,13 +233,19 @@ class _SignupProPageState extends State<SignupProPage> {
 
       _startTimer(120);
     } catch (e) {
-      setState(() {
-        _message = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
+        _message = e.toString().replaceFirst('Exception: ', '');
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_message!),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

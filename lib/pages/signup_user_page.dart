@@ -210,13 +210,6 @@ class _SignupUserPageState extends State<SignupUserPage> {
         );
         return;
       }
-
-      if (_selectedSexe == null) {
-        setState(() => _sexError = true);
-        return;
-      } else {
-        _sexError = false;
-      }
     }
 
     if (_step == 3) {
@@ -271,7 +264,14 @@ class _SignupUserPageState extends State<SignupUserPage> {
     });
 
     try {
-      await apiSendEmailCode(email);
+      await apiSendEmailCode(email).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception(
+            "Temps d’attente dépassé. Vérifiez votre connexion internet.",
+          );
+        },
+      );
 
       setState(() {
         _pendingEmail = email;
@@ -282,13 +282,19 @@ class _SignupUserPageState extends State<SignupUserPage> {
 
       _startTimer(120); // 2 minutes
     } catch (e) {
-      setState(() {
-        _message = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
+        _message = e.toString().replaceFirst('Exception: ', '');
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_message!),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -385,7 +391,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
       if (!mounted) return;
 
       setState(() {
-        _message = "Compte créé avec succès 🎉";
+        _message = "Compte créé avec succès";
       });
 
       await Future.delayed(const Duration(milliseconds: 600));
@@ -480,7 +486,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
         ),
         const SizedBox(height: 16),
         const Text(
-          "Sexe",
+          "Sexe (optionnel)",
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
@@ -525,14 +531,6 @@ class _SignupUserPageState extends State<SignupUserPage> {
             ),
           ],
         ),
-        if (_sexError)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text(
-              "Veuillez sélectionner un sexe.",
-              style: TextStyle(color: Colors.red, fontSize: 12),
-            ),
-          ),
       ],
     );
   }
@@ -664,6 +662,13 @@ class _SignupUserPageState extends State<SignupUserPage> {
         ),
         const SizedBox(height: 12),
         _buildPasswordRulesWidget(),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.only(top: 16),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
       ],
     );
   }
