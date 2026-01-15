@@ -301,71 +301,71 @@ class _SignupUserPageState extends State<SignupUserPage> {
   // ============================================================
   // 🔥 VÉRIFICATION DU CODE (étape 5)
   // ============================================================
-Future<void> _verifyEmailStep() async {
-  if (_pendingEmail == null || _pendingEmail!.isEmpty) {
-    if (!mounted) return;
+  Future<void> _verifyEmailStep() async {
+    if (_pendingEmail == null || _pendingEmail!.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _message = "Email introuvable, veuillez revenir à l’étape précédente.";
+        _step = 4;
+      });
+      return;
+    }
+
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty) {
+      setState(() {
+        _message = "Veuillez entrer le code reçu par email.";
+      });
+      return;
+    }
+
+    if (_remainingSeconds == 0) {
+      setState(() {
+        _message = "Le code a expiré, veuillez renvoyer un nouveau code.";
+      });
+      return;
+    }
+
     setState(() {
-      _message = "Email introuvable, veuillez revenir à l’étape précédente.";
-      _step = 4;
+      _loading = true;
+      _message = null;
     });
-    return;
+
+    try {
+      await apiVerifyEmailCode(_pendingEmail!, code).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception(
+            "Impossible de vérifier le code. Vérifiez votre connexion.",
+          );
+        },
+      );
+
+      if (!mounted) return;
+      _timer?.cancel();
+
+      setState(() {
+        _loading = false;
+        _emailVerified = true;
+        _message = "Email vérifié avec succès";
+        _step = 6;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_message!),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
-
-  final code = _codeCtrl.text.trim();
-  if (code.isEmpty) {
-    setState(() {
-      _message = "Veuillez entrer le code reçu par email.";
-    });
-    return;
-  }
-
-  if (_remainingSeconds == 0) {
-    setState(() {
-      _message = "Le code a expiré, veuillez renvoyer un nouveau code.";
-    });
-    return;
-  }
-
-  setState(() {
-    _loading = true;
-    _message = null;
-  });
-
-  try {
-    await apiVerifyEmailCode(_pendingEmail!, code).timeout(
-      const Duration(seconds: 15),
-      onTimeout: () {
-        throw Exception(
-          "Impossible de vérifier le code. Vérifiez votre connexion.",
-        );
-      },
-    );
-
-    if (!mounted) return;
-    _timer?.cancel();
-
-    setState(() {
-      _loading = false;
-      _emailVerified = true;
-      _message = "Email vérifié avec succès";
-      _step = 6;
-    });
-  } catch (e) {
-    if (!mounted) return;
-
-    setState(() {
-      _loading = false;
-      _message = e.toString().replaceFirst('Exception: ', '');
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_message!),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
 
   // ============================================================
   // SOUMISSION FINALE
@@ -696,7 +696,9 @@ Future<void> _verifyEmailStep() async {
             "Un code de vérification a été envoyé à :\n$_pendingEmail",
             style: const TextStyle(fontSize: 14),
           ),
+
         const SizedBox(height: 12),
+
         Row(
           children: [
             if (_remainingSeconds > 0)
@@ -715,6 +717,7 @@ Future<void> _verifyEmailStep() async {
                       size: 16,
                       color: Theme.of(context).colorScheme.error,
                     ),
+                    const SizedBox(width: 6),
                     Text(
                       "Expire dans ${_formatDuration(_remainingSeconds)}",
                       style: TextStyle(
@@ -733,7 +736,9 @@ Future<void> _verifyEmailStep() async {
               ),
           ],
         ),
+
         const SizedBox(height: 16),
+
         TextFormField(
           controller: _codeCtrl,
           decoration: const InputDecoration(
@@ -742,14 +747,15 @@ Future<void> _verifyEmailStep() async {
           ),
           keyboardType: TextInputType.number,
         ),
-        const SizedBox(height: 10),
+
+        const SizedBox(height: 12),
+
         Row(
           children: [
             TextButton(
               onPressed: _loading
                   ? null
                   : () {
-                      // 👉 Retour pour changer l'email
                       setState(() {
                         _step = 4;
                         _emailCodeSent = false;
@@ -766,12 +772,42 @@ Future<void> _verifyEmailStep() async {
               onPressed: (_loading || _pendingEmail == null)
                   ? null
                   : () async {
-                      if (_pendingEmail == null) return;
                       await _sendEmailCodeStep();
                     },
               child: const Text("Renvoyer le code"),
             ),
           ],
+        ),
+
+        const SizedBox(height: 20),
+
+        /// 🔥 BOUTON DÉDIÉ POUR APPLE (clé de la validation)
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: _loading
+                ? null
+                : () async {
+                    await _verifyEmailStep();
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 255, 0, 0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: _loading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text("Confirmer le code"),
+          ),
         ),
       ],
     );
@@ -1139,11 +1175,7 @@ Future<void> _verifyEmailStep() async {
                               ),
                             )
                           : Text(
-                              _step == 6
-                                  ? 'Créer mon compte'
-                                  : _step == 5
-                                      ? 'Vérifier le code'
-                                      : 'Suivant',
+                              _step == 6 ? 'Créer mon compte' : 'Suivant',
                             ),
                     ),
                   ),
