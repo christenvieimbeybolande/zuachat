@@ -1107,7 +1107,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _loading
+                      onPressed: _loading || (_step == 6 && !_termsAccepted)
                           ? null
                           : () async {
                               await _nextOrSubmit();
