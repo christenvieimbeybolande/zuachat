@@ -243,7 +243,6 @@ class _SignupProPageState extends State<SignupProPage> {
       if (!mounted) return;
 
       setState(() {
-        _loading = false;
         _message = e.toString().replaceFirst('Exception: ', '');
       });
 
@@ -253,6 +252,12 @@ class _SignupProPageState extends State<SignupProPage> {
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false; // 🔥🔥🔥 LIGNE CRITIQUE
+        });
+      }
     }
   }
 

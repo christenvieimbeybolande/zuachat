@@ -258,19 +258,20 @@ class _SignupUserPageState extends State<SignupUserPage> {
         },
       );
 
+      if (!mounted) return;
+
       setState(() {
         _pendingEmail = email;
         _emailCodeSent = true;
         _message = "Un code a été envoyé à $email.";
-        _step = 5; // aller à l’étape de vérification
+        _step = 5;
       });
 
-      _startTimer(120); // 2 minutes
+      _startTimer(120);
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _loading = false;
         _message = e.toString().replaceFirst('Exception: ', '');
       });
 
@@ -280,6 +281,12 @@ class _SignupUserPageState extends State<SignupUserPage> {
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false; // 🔥🔥🔥 LIGNE QUI MANQUAIT
+        });
+      }
     }
   }
 
