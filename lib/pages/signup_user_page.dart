@@ -379,9 +379,8 @@ class _SignupUserPageState extends State<SignupUserPage> {
 
     _data['type'] = 'simple';
     _data['date_naissance'] = _birthCtrl.text;
-    if (_selectedSexe != null && _selectedSexe!.isNotEmpty) {
-      _data['sexe'] = _selectedSexe;
-    }
+    // Sexe optionnel : valeur par défaut
+    _data['sexe'] = _selectedSexe ?? 'Non précisé';
 
     _data['pays'] = _selectedCountry;
 
