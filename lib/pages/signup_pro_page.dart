@@ -139,25 +139,22 @@ class _SignupProPageState extends State<SignupProPage> {
   Future<void> _nextOrSubmit() async {
     FocusScope.of(context).unfocus();
 
+    // 🔚 Étape finale → création du compte
     if (_step == 6) {
       await _submit();
       return;
     }
 
-    if (!_formKey.currentState!.validate()) return;
-
-    // Validations custom
-    if (_step == 2) {
-      if (_selectedCountry == null || _selectedCountry!.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Veuillez sélectionner un pays."),
-          ),
-        );
-        return;
-      }
+    // 🔥 ÉTAPE 5 → vérification du code email (COMME AVANT)
+    if (_step == 5) {
+      await _verifyEmailStep();
+      return;
     }
 
+    // Validation du formulaire
+    if (!_formKey.currentState!.validate()) return;
+
+    // 🔎 Validations spécifiques
     if (_step == 1) {
       if (_selectedCategory == null || _selectedCategory!.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -169,21 +166,36 @@ class _SignupProPageState extends State<SignupProPage> {
       }
     }
 
+    if (_step == 2) {
+      if (_selectedCountry == null || _selectedCountry!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Veuillez sélectionner un pays."),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Sauvegarde des champs
     _formKey.currentState!.save();
 
+    // 📧 Étape 4 → envoi du code email
     if (_step == 4) {
-      // 🔥 après mot de passe → envoyer code email
       await _sendEmailCodeStep();
       return;
     }
 
+    // 🔁 Retour depuis résumé
     if (_returnToSummary) {
       setState(() {
         _step = 6;
         _returnToSummary = false;
       });
     } else {
-      setState(() => _step++);
+      setState(() {
+        _step++;
+      });
     }
   }
 
@@ -919,6 +931,7 @@ class _SignupProPageState extends State<SignupProPage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 255, 0, 0),
@@ -990,11 +1003,7 @@ class _SignupProPageState extends State<SignupProPage> {
                       onPressed: _loading || (_step == 6 && !_termsAccepted)
                           ? null
                           : () async {
-                              if (_step == 5) {
-                                await _verifyEmailStep(); // 👈 UNIQUE appel
-                              } else {
-                                await _nextOrSubmit();
-                              }
+                              await _nextOrSubmit();
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 255, 0, 0),

@@ -186,19 +186,21 @@ class _SignupUserPageState extends State<SignupUserPage> {
       return;
     }
 
-    // Pour les autres étapes : validation formulaire
+    // 🔥 ÉTAPE 5 = vérification code (COMME AVANT)
+    if (_step == 5) {
+      await _verifyEmailStep();
+      return;
+    }
+
+    // Validation formulaire
     if (!_formKey.currentState!.validate()) return;
 
-    // Validations custom par étape
+    // Étape 2 : âge
     if (_step == 2) {
-      final birth = _birthCtrl.text;
-
-      if (!_isAtLeast13YearsOld(birth)) {
+      if (!_isAtLeast13YearsOld(_birthCtrl.text)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              "Vous devez avoir au moins 13 ans pour créer un compte ZuaChat.",
-            ),
+            content: Text("Vous devez avoir au moins 13 ans."),
             backgroundColor: Colors.red,
           ),
         );
@@ -206,35 +208,24 @@ class _SignupUserPageState extends State<SignupUserPage> {
       }
     }
 
-    if (_step == 3) {
-      if (_selectedCountry == null || _selectedCountry!.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Veuillez sélectionner un pays."),
-          ),
-        );
-        return;
-      }
+    // Étape 3 : pays
+    if (_step == 3 && (_selectedCountry == null || _selectedCountry!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Veuillez sélectionner un pays.")),
+      );
+      return;
     }
 
     _formKey.currentState!.save();
 
-    // Gestion des étapes
+    // Étape 4 : envoi code email
     if (_step == 4) {
-      // 🔥 Étape 4 : email + mot de passe → envoyer le code + passer à 5
       await _sendEmailCodeStep();
       return;
     }
 
-    // Étapes 1 → 3 : avancer simplement
-    if (_returnToSummary) {
-      setState(() {
-        _step = 6; // retour direct au résumé après corrections
-        _returnToSummary = false;
-      });
-    } else {
-      setState(() => _step++);
-    }
+    // Étapes normales
+    setState(() => _step++);
   }
 
   // ============================================================
@@ -1041,6 +1032,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
     final progress = _step / stepCount;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 255, 0, 0),
@@ -1115,11 +1107,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
                       onPressed: _loading
                           ? null
                           : () async {
-                              if (_step == 5) {
-                                await _verifyEmailStep(); // 👈 vérification code
-                              } else {
-                                await _nextOrSubmit(); // 👈 étapes normales
-                              }
+                              await _nextOrSubmit();
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 255, 0, 0),
