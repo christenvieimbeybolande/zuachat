@@ -144,11 +144,6 @@ class _SignupProPageState extends State<SignupProPage> {
       return;
     }
 
-    if (_step == 5) {
-      await _verifyEmailStep();
-      return;
-    }
-
     if (!_formKey.currentState!.validate()) return;
 
     // Validations custom
@@ -995,7 +990,11 @@ class _SignupProPageState extends State<SignupProPage> {
                       onPressed: _loading || (_step == 6 && !_termsAccepted)
                           ? null
                           : () async {
-                              await _nextOrSubmit();
+                              if (_step == 5) {
+                                await _verifyEmailStep(); // 👈 UNIQUE appel
+                              } else {
+                                await _nextOrSubmit();
+                              }
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 255, 0, 0),

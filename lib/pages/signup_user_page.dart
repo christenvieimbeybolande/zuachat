@@ -186,12 +186,6 @@ class _SignupUserPageState extends State<SignupUserPage> {
       return;
     }
 
-    // Étape spéciale 5 = vérification code email
-    if (_step == 5) {
-      await _verifyEmailStep();
-      return;
-    }
-
     // Pour les autres étapes : validation formulaire
     if (!_formKey.currentState!.validate()) return;
 
@@ -696,9 +690,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
             "Un code de vérification a été envoyé à :\n$_pendingEmail",
             style: const TextStyle(fontSize: 14),
           ),
-
         const SizedBox(height: 12),
-
         Row(
           children: [
             if (_remainingSeconds > 0)
@@ -736,9 +728,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
               ),
           ],
         ),
-
         const SizedBox(height: 16),
-
         TextFormField(
           controller: _codeCtrl,
           decoration: const InputDecoration(
@@ -747,9 +737,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
           ),
           keyboardType: TextInputType.number,
         ),
-
         const SizedBox(height: 12),
-
         Row(
           children: [
             TextButton(
@@ -778,37 +766,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
             ),
           ],
         ),
-
         const SizedBox(height: 20),
-
-        /// 🔥 BOUTON DÉDIÉ POUR APPLE (clé de la validation)
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _loading
-                ? null
-                : () async {
-                    await _verifyEmailStep();
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 255, 0, 0),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: _loading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text("Confirmer le code"),
-          ),
-        ),
       ],
     );
   }
@@ -1154,10 +1112,14 @@ class _SignupUserPageState extends State<SignupUserPage> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _loading || (_step == 6 && !_termsAccepted)
+                      onPressed: _loading
                           ? null
                           : () async {
-                              await _nextOrSubmit();
+                              if (_step == 5) {
+                                await _verifyEmailStep(); // 👈 vérification code
+                              } else {
+                                await _nextOrSubmit(); // 👈 étapes normales
+                              }
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color.fromARGB(255, 255, 0, 0),
@@ -1175,7 +1137,11 @@ class _SignupUserPageState extends State<SignupUserPage> {
                               ),
                             )
                           : Text(
-                              _step == 6 ? 'Créer mon compte' : 'Suivant',
+                              _step == 6
+                                  ? 'Créer mon compte'
+                                  : _step == 5
+                                      ? 'Vérifier le code'
+                                      : 'Suivant',
                             ),
                     ),
                   ),
