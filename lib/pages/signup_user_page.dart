@@ -379,7 +379,10 @@ class _SignupUserPageState extends State<SignupUserPage> {
 
     _data['type'] = 'simple';
     _data['date_naissance'] = _birthCtrl.text;
-    _data['sexe'] = _selectedSexe;
+    if (_selectedSexe != null && _selectedSexe!.isNotEmpty) {
+      _data['sexe'] = _selectedSexe;
+    }
+
     _data['pays'] = _selectedCountry;
 
     setState(() {
@@ -388,6 +391,8 @@ class _SignupUserPageState extends State<SignupUserPage> {
     });
 
     try {
+      _data.removeWhere((key, value) => value == null || value == '');
+
       await apiSignup(_data);
 
       if (!mounted) return;
