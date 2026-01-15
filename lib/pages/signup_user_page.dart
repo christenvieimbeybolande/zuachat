@@ -288,9 +288,8 @@ class _SignupUserPageState extends State<SignupUserPage> {
   // ============================================================
   Future<void> _verifyEmailStep() async {
     if (_pendingEmail == null || _pendingEmail!.isEmpty) {
-      if (!mounted) return;
       setState(() {
-        _message = "Email introuvable, veuillez revenir à l’étape précédente.";
+        _message = "Email introuvable.";
         _step = 4;
       });
       return;
@@ -306,7 +305,7 @@ class _SignupUserPageState extends State<SignupUserPage> {
 
     if (_remainingSeconds == 0) {
       setState(() {
-        _message = "Le code a expiré, veuillez renvoyer un nouveau code.";
+        _message = "Le code a expiré.";
       });
       return;
     }
@@ -317,29 +316,20 @@ class _SignupUserPageState extends State<SignupUserPage> {
     });
 
     try {
-      await apiVerifyEmailCode(_pendingEmail!, code).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception(
-            "Impossible de vérifier le code. Vérifiez votre connexion.",
-          );
-        },
-      );
+      await apiVerifyEmailCode(_pendingEmail!, code);
 
       if (!mounted) return;
+
       _timer?.cancel();
 
       setState(() {
-        _loading = false;
         _emailVerified = true;
-        _message = "Email vérifié avec succès";
         _step = 6;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _loading = false;
         _message = e.toString().replaceFirst('Exception: ', '');
       });
 
@@ -349,6 +339,12 @@ class _SignupUserPageState extends State<SignupUserPage> {
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false; // 🔥 LIGNE CRITIQUE
+        });
+      }
     }
   }
 

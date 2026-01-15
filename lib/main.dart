@@ -31,7 +31,7 @@ import 'api/client.dart';
 import 'api/app_update_check.dart';
 
 /// 🔥 VERSION APP (AFFICHAGE UNIQUEMENT)
-const String kAppVersion = "5.7.7";
+const String kAppVersion = "5.8.8";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =

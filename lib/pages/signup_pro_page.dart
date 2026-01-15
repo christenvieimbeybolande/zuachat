@@ -262,8 +262,13 @@ class _SignupProPageState extends State<SignupProPage> {
   Future<void> _verifyEmailStep() async {
     if (_pendingEmail == null || _pendingEmail!.isEmpty) {
       setState(() {
-        _message = "Email introuvable, veuillez revenir à l’étape 3.";
+        _message = "Email introuvable, veuillez ressaisir votre email.";
         _step = 3;
+        _emailCodeSent = false;
+        _emailVerified = false;
+        _codeCtrl.clear();
+        _timer?.cancel();
+        _remainingSeconds = 0;
       });
       return;
     }
@@ -660,7 +665,6 @@ class _SignupProPageState extends State<SignupProPage> {
               onPressed: _loading || _pendingEmail == null
                   ? null
                   : () async {
-                      if (_pendingEmail == null) return;
                       await _sendEmailCodeStep();
                     },
               child: const Text("Renvoyer le code"),
