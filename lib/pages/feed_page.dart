@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../widgets/publication_card.dart';
 import '../widgets/bottom_nav.dart';
@@ -45,6 +46,12 @@ class _FeedPageState extends State<FeedPage>
   bool _isLoadingMore = false;
   int unreadNotifications = 0;
   int unreadMessages = 0;
+  // ==============================
+// 🧪 DEBUG iOS PUSH (TEMPORAIRE)
+// ==============================
+  String _debugApns = '⏳ en attente…';
+  String _debugFcm = '⏳ en attente…';
+  bool _debugLoaded = false;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -63,6 +70,30 @@ class _FeedPageState extends State<FeedPage>
   late AnimationController _animCtrl;
 
   static const primaryColor = Color(0xFFFF0000);
+  Future<void> _debugPushTokens() async {
+    if (!Platform.isIOS || _debugLoaded) return;
+
+    _debugLoaded = true;
+
+    final messaging = FirebaseMessaging.instance;
+
+    try {
+      final apns = await messaging.getAPNSToken();
+      final fcm = await messaging.getToken();
+
+      if (!mounted) return;
+
+      setState(() {
+        _debugApns = apns ?? '❌ APNs TOKEN = NULL';
+        _debugFcm = fcm ?? '❌ FCM TOKEN = NULL';
+      });
+    } catch (e) {
+      setState(() {
+        _debugApns = '❌ ERREUR APNs';
+        _debugFcm = '❌ ERREUR FCM';
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -75,6 +106,7 @@ class _FeedPageState extends State<FeedPage>
 
     _scrollController.addListener(_handleScroll);
     _checkAuthState();
+    _debugPushTokens();
   }
 
   @override
@@ -494,6 +526,40 @@ class _FeedPageState extends State<FeedPage>
         onRefresh: _onRefresh,
         child: Column(
           children: [
+            if (Platform.isIOS)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🧪 DEBUG PUSH iOS (TEMPORAIRE)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'APNs → $_debugApns',
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'FCM → $_debugFcm',
+                      style: const TextStyle(color: Colors.green, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+
             // 🔥 La barre Sync Like sous l’AppBar
             ValueListenableBuilder(
               valueListenable: _showSyncBar,
