@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // 🔥 FIREBASE
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 
 // 🔔 LOCAL NOTIFICATIONS
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -42,7 +43,9 @@ final FlutterLocalNotificationsPlugin localNotifications =
 /// =========================================================
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 }
 
 /// =========================================================
@@ -52,7 +55,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 🔥 Firebase
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
