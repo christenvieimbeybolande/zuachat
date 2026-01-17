@@ -32,7 +32,7 @@ import 'api/client.dart';
 import 'api/app_update_check.dart';
 
 /// 🔥 VERSION APP (AFFICHAGE UNIQUEMENT)
-const String kAppVersion = "6.2.4";
+const String kAppVersion = "6.2.5";
 
 /// 🔔 Local notifications instance
 final FlutterLocalNotificationsPlugin localNotifications =
@@ -60,6 +60,13 @@ Future<void> main() async {
   );
 
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+
+// ✅ OBLIGATOIRE POUR iOS (SINON AUCUNE NOTIFICATION)
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
 
   // 🔔 Local notifications
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
