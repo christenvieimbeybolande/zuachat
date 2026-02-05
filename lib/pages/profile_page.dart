@@ -94,12 +94,8 @@ class _ProfilePageState extends State<ProfilePage>
       _bioCtrl.text = (_data?['user']?['bio'] ?? '').toString();
 
       // 🔥 Publications venant directement de l'API PHP
-      final pubs = (d['publications'] ?? []) as List;
-
-      _publications = pubs
-          .whereType<Map>()
-          .map<Map<String, dynamic>>((e) => e.cast<String, dynamic>())
-          .toList();
+      final uid = int.tryParse('${_data!['user']['id']}');
+      await _loadPublications(uid);
 
       _loading = false;
       _pubsLoading = false;

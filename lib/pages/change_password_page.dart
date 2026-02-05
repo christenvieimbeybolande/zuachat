@@ -141,7 +141,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
       setState(() {
         _step = 3; // 🔥 on va directement à l’étape nouveau mot de passe
-        _message = "Ancien mot de passe vérifié ✅";
+        _message = "Ancien mot de passe vérifié ";
         _successMsg = true;
       });
     } catch (e) {
@@ -307,7 +307,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       if (!mounted) return;
 
       setState(() {
-        _message = "Mot de passe modifié avec succès 🎉";
+        _message = "Mot de passe modifié avec succès ";
         _successMsg = true;
       });
 
