@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async'; // ✅ OBLIGATOIRE POUR Timer
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
@@ -45,6 +46,7 @@ class _FeedPageState extends State<FeedPage>
   bool _isLoadingMore = false;
   int unreadNotifications = 0;
   int unreadMessages = 0;
+  Timer? _pollingTimer;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -64,21 +66,32 @@ class _FeedPageState extends State<FeedPage>
 
   static const primaryColor = Color(0xFFFF0000);
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    _animCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
+  _animCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  );
 
-    _scrollController.addListener(_handleScroll);
-    _checkAuthState();
-  }
+  _scrollController.addListener(_handleScroll);
+  _checkAuthState();
+
+  // 🔁 POLLING FEED (compteurs seulement)
+  _pollingTimer = Timer.periodic(
+    const Duration(seconds: 10),
+    (_) {
+      if (!mounted) return;
+      _pollCountsOnly();
+    },
+  );
+}
+
 
   @override
   void dispose() {
+      _pollingTimer?.cancel(); // ✅ OBLIGATOIRE
     _animCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -171,6 +184,22 @@ class _FeedPageState extends State<FeedPage>
           _load(reset: true);
         }
       });
+    }
+  }
+
+  Future<void> _pollCountsOnly() async {
+    try {
+      final res = await fetchHomeFeed(page: 1, limit: 1);
+
+      if (res['ok'] == true && mounted) {
+        setState(() {
+          unreadMessages = res['unread_messages'] ?? unreadMessages;
+          unreadNotifications =
+              res['unread_notifications'] ?? unreadNotifications;
+        });
+      }
+    } catch (_) {
+      // silence volontaire
     }
   }
 

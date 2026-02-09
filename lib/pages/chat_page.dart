@@ -57,6 +57,8 @@ class _ChatPageState extends State<ChatPage> {
 
   Duration _recordDuration = Duration.zero;
   Timer? _recordTimer;
+  Timer? _pollingTimer;
+
 
   String? _recordPath;
 
@@ -105,26 +107,43 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> _messages = [];
   DateTime? _lastLoadAt;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    _msgCtrl.addListener(() {
-      setState(() {});
-    });
+  _msgCtrl.addListener(() {
+    setState(() {});
+  });
 
-    _load(initial: true);
-    _checkBlocked();
-  }
+  // 🔹 Chargement initial
+  _load(initial: true);
+  _checkBlocked();
 
-  @override
-  void dispose() {
-    _recordTimer?.cancel();
-    _recorder.dispose(); // ✅ OBLIGATOIRE avec AudioRecorder
-    _msgCtrl.dispose();
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
+  // 🔁 POLLING : recharge les messages toutes les 3 secondes
+  _pollingTimer = Timer.periodic(
+    const Duration(seconds: 3),
+    (_) {
+      if (!mounted) return;
+
+      // ⛔ ne pas recharger pendant un envoi ou un enregistrement
+      if (_sending || _isRecording) return;
+
+      _load(scrollToEnd: false);
+    },
+  );
+}
+
+
+@override
+void dispose() {
+  _pollingTimer?.cancel(); // ✅ AJOUT OBLIGATOIRE
+  _recordTimer?.cancel();
+  _recorder.dispose();
+  _msgCtrl.dispose();
+  _scrollCtrl.dispose();
+  super.dispose();
+}
+
 
   Future<void> _checkBlocked() async {
     final blocked = await apiIsBlocked(widget.contactId);

@@ -1,3 +1,4 @@
+import 'dart:async'; // ✅ OBLIGATOIRE POUR Timer
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -16,6 +17,7 @@ class MessageListPage extends StatefulWidget {
 
 class _MessageListPageState extends State<MessageListPage> {
   static const primary = Color(0xFFFF0000);
+  Timer? _pollingTimer;
 
   // ======================================================
   // ⏱️ Format "il y a 5 min / hier / il y a 3 jours / date"
@@ -54,7 +56,23 @@ class _MessageListPageState extends State<MessageListPage> {
   @override
   void initState() {
     super.initState();
+
     _load();
+
+    // 🔁 POLLING conversations (toutes les 5 secondes)
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) {
+        if (!mounted) return;
+        _load();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel(); // ✅ TRÈS IMPORTANT
+    super.dispose();
   }
 
   // ======================================================
