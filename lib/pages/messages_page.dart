@@ -57,14 +57,14 @@ class _MessageListPageState extends State<MessageListPage> {
   void initState() {
     super.initState();
 
-    _load();
+    _load(); // ✅ chargement initial SEULEMENT
 
-    // 🔁 POLLING conversations (toutes les 5 secondes)
+    // 🔁 POLLING SILENCIEUX (temps réel sans clignotement)
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) {
         if (!mounted) return;
-        _load();
+        _pollSilent(); // ✅ IMPORTANT
       },
     );
   }
@@ -73,6 +73,31 @@ class _MessageListPageState extends State<MessageListPage> {
   void dispose() {
     _pollingTimer?.cancel(); // ✅ TRÈS IMPORTANT
     super.dispose();
+  }
+
+  // ======================================================
+  // 🔕 Polling SILENCIEUX (basé sur last_msg_time)
+  // ======================================================
+  Future<void> _pollSilent() async {
+    try {
+      final data = await apiFetchConversations();
+      if (!mounted) return;
+
+      final oldTime = _conversations.isNotEmpty
+          ? _conversations.first['last_msg_time']
+          : null;
+
+      final newTime = data.isNotEmpty ? data.first['last_msg_time'] : null;
+
+      // 🔥 Mise à jour UNIQUEMENT s’il y a un nouveau message
+      if (oldTime != newTime) {
+        setState(() {
+          _conversations = data;
+        });
+      }
+    } catch (_) {
+      // silence total (pas d'UI impactée)
+    }
   }
 
   // ======================================================

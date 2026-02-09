@@ -50,6 +50,9 @@ class _ChatPageState extends State<ChatPage> {
   Map<String, dynamic>? _replyToMessage;
   int? _highlightedMessageId;
 
+  final List<Map<String, dynamic>> _audioQueue = [];
+  bool _sendingAudioQueue = false;
+
   bool _isRecording = false;
   bool _isLocked = false;
   bool _isPaused = false;
@@ -59,8 +62,9 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _recordTimer;
   Timer? _pollingTimer;
 
-
   String? _recordPath;
+  final List<Map<String, dynamic>> _sendQueue = [];
+  bool _sendingQueue = false;
 
   bool _loading = true;
   bool _sending = false;
@@ -107,43 +111,83 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> _messages = [];
   DateTime? _lastLoadAt;
 
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-  _msgCtrl.addListener(() {
-    setState(() {});
-  });
+    _msgCtrl.addListener(() {
+      setState(() {});
+    });
 
-  // 🔹 Chargement initial
-  _load(initial: true);
-  _checkBlocked();
+    // 🔹 Chargement initial
+    _load(initial: true);
+    _checkBlocked();
 
-  // 🔁 POLLING : recharge les messages toutes les 3 secondes
-  _pollingTimer = Timer.periodic(
-    const Duration(seconds: 3),
-    (_) {
-      if (!mounted) return;
+    // 🔁 POLLING : recharge les messages toutes les 3 secondes
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) {
+        if (!mounted) return;
 
-      // ⛔ ne pas recharger pendant un envoi ou un enregistrement
-      if (_sending || _isRecording) return;
+        // ⛔ ne pas recharger pendant un envoi ou un enregistrement
+        if (_sending || _isRecording) return;
 
-      _load(scrollToEnd: false);
-    },
-  );
-}
+        _load(scrollToEnd: false);
+        _trySendQueuedMessages(); // texte
+        _trySendQueuedAudios(); // audio ✅
+      },
+    );
+  }
 
+  void _queueMessage(Map<String, dynamic> msg) {
+    _sendQueue.add(msg);
+  }
+ù
+  Future<void> _trySendQueuedMessages() async {
+    if (_sendingQueue) return;
+    _sendingQueue = true;
+    if (_isBlocked) {
+      _audioQueue.clear();
+      _sendQueue.clear();
+      return;
+    }
 
-@override
-void dispose() {
-  _pollingTimer?.cancel(); // ✅ AJOUT OBLIGATOIRE
-  _recordTimer?.cancel();
-  _recorder.dispose();
-  _msgCtrl.dispose();
-  _scrollCtrl.dispose();
-  super.dispose();
-}
+    while (_sendQueue.isNotEmpty) {
+      final msg = _sendQueue.first;
 
+      try {
+        await apiSendChatMessage(
+          receiverId: widget.contactId,
+          message: msg["message"],
+          replyTo: _replyToMessage?['id'],
+        );
+
+        // ✅ succès → retirer de la queue
+        _sendQueue.removeAt(0);
+
+        // 🔄 mettre à jour le statut local
+        setState(() {
+          msg["local_status"] = "sent";
+          msg["time"] = "Envoyé";
+        });
+      } catch (_) {
+        // ❌ pas de connexion → on arrête
+        break;
+      }
+    }
+
+    _sendingQueue = false;
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel(); // ✅ AJOUT OBLIGATOIRE
+    _recordTimer?.cancel();
+    _recorder.dispose();
+    _msgCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _checkBlocked() async {
     final blocked = await apiIsBlocked(widget.contactId);
@@ -208,23 +252,31 @@ void dispose() {
   // ============================================================
   Future<void> _send() async {
     final text = _msgCtrl.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty) return;
 
-    setState(() => _sending = true);
+    _msgCtrl.clear();
 
-    try {
-      await apiSendChatMessage(
-        receiverId: widget.contactId,
-        message: text,
-        replyTo: _replyToMessage?['id'], // 🔥 NOUVEAU
-      );
-      setState(() => _replyToMessage = null);
+    // 1️⃣ Message LOCAL immédiat
+    final Map<String, dynamic> localMsg = {
+      "id": -DateTime.now().millisecondsSinceEpoch,
+      "message": text,
+      "sender_id": 0,
+      "created_at": DateTime.now().toIso8601String(),
+      "time": "En attente…",
+      "local_status": "pending",
+    };
 
-      _msgCtrl.clear();
-      await _load(scrollToEnd: true);
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
+    setState(() {
+      _messages.add(localMsg);
+    });
+
+    _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+
+    // 2️⃣ Ajouter dans la file d’attente locale
+    _queueMessage(localMsg);
+
+    // 3️⃣ Lancer tentative d’envoi
+    _trySendQueuedMessages();
   }
 
   // ============================================================
@@ -276,16 +328,27 @@ void dispose() {
     }
 
     if (send && _recordPath != null) {
-      await apiSendAudioMessage(
-        receiverId: widget.contactId,
-        filePath: _recordPath!,
-        duration: _recordDuration.inSeconds,
-        replyTo: _replyToMessage?['id'], // ✅ AJOUT
-      );
+      final Map<String, dynamic> localAudioMsg = {
+        "id": -DateTime.now().millisecondsSinceEpoch,
+        "type": "audio",
+        "audio_path": _recordPath!,
+        "audio_duration": _recordDuration.inSeconds,
+        "sender_id": 0,
+        "created_at": DateTime.now().toIso8601String(),
+        "time": "En attente…",
+        "local_status": "pending",
+        "reply_to": _replyToMessage?['id'],
+        "seen": 0,
+      };
 
-      setState(() => _replyToMessage = null); // ✅ TRÈS IMPORTANT
+      setState(() {
+        _messages.add(localAudioMsg);
+      });
 
-      await _load(scrollToEnd: true);
+      _audioQueue.add(localAudioMsg);
+      _trySendQueuedAudios();
+
+      setState(() => _replyToMessage = null);
     }
 
     setState(() {
@@ -294,6 +357,10 @@ void dispose() {
       _isPaused = false;
       _recordDuration = Duration.zero;
     });
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (_scrollCtrl.hasClients) {
+      _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+    }
   }
 
   void _scrollToMessage(int messageId) {
@@ -339,6 +406,39 @@ void dispose() {
   }
 
   bool _isMe(int senderId) => senderId != widget.contactId;
+  Future<void> _trySendQueuedAudios() async {
+    if (_sendingAudioQueue) return;
+    _sendingAudioQueue = true;
+    if (_isBlocked) {
+      _audioQueue.clear();
+      _sendQueue.clear();
+      return;
+    }
+
+    while (_audioQueue.isNotEmpty) {
+      final msg = _audioQueue.first;
+
+      try {
+        await apiSendAudioMessage(
+          receiverId: widget.contactId,
+          filePath: msg["audio_path"],
+          duration: msg["audio_duration"],
+          replyTo: msg["reply_to"],
+        );
+
+        _audioQueue.removeAt(0);
+
+        setState(() {
+          msg["local_status"] = "sent";
+          msg["time"] = "Envoyé";
+        });
+      } catch (_) {
+        break; // pas de connexion
+      }
+    }
+
+    _sendingAudioQueue = false;
+  }
 
   // ============================================================
   // 📌 Options message
@@ -489,6 +589,31 @@ void dispose() {
     final msgId = int.parse(m['id'].toString());
     final isHighlighted = _highlightedMessageId == msgId;
 
+    final status = m["local_status"];
+
+    if (status == "pending" && m["type"] != "audio") {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade400,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.access_time, size: 12, color: Colors.white),
+              SizedBox(width: 6),
+              Text("En attente…",
+                  style: TextStyle(color: Colors.white, fontSize: 12)),
+            ],
+          ),
+        ),
+      );
+    }
+
     final isMe = _isMe(int.parse("${m['sender_id']}"));
     final deleted = m["deleted_by"] != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -529,6 +654,19 @@ void dispose() {
             "Message supprimé",
             style: TextStyle(color: Colors.white, fontStyle: FontStyle.italic),
           ),
+        ),
+      );
+    }
+    if (m["type"] == "audio" && m["local_status"] == "pending") {
+      return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.access_time, size: 14, color: Colors.grey),
+            SizedBox(width: 4),
+            Text("Audio en attente", style: TextStyle(fontSize: 12)),
+          ],
         ),
       );
     }
@@ -948,6 +1086,10 @@ void dispose() {
                 controller: _msgCtrl,
                 minLines: 1,
                 maxLines: 4,
+
+                // ✅ DÉBUT EN MAJUSCULE POUR LE PREMIER MOT
+                textCapitalization: TextCapitalization.sentences,
+
                 decoration: InputDecoration(
                   hintText: "Votre message...",
                   filled: true,
