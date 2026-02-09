@@ -142,7 +142,7 @@ class _ChatPageState extends State<ChatPage> {
   void _queueMessage(Map<String, dynamic> msg) {
     _sendQueue.add(msg);
   }
-ù
+
   Future<void> _trySendQueuedMessages() async {
     if (_sendingQueue) return;
     _sendingQueue = true;
