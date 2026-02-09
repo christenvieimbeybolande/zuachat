@@ -2,7 +2,7 @@ name: zuachat
 description: Application Flutter ZuaChat
 publish_to: "none"
 
-version: 6.2.9+29
+version: 6.2.91+30
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

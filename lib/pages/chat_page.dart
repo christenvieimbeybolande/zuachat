@@ -69,6 +69,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _loading = true;
   bool _sending = false;
   bool _error = false;
+  bool _offline = false;
 
   DateTime _parseMessageDate(Map m) {
     // adapte si besoin selon ton backend
@@ -128,6 +129,11 @@ class _ChatPageState extends State<ChatPage> {
       const Duration(seconds: 3),
       (_) {
         if (!mounted) return;
+        if (_offline) {
+          _trySendQueuedMessages();
+          _trySendQueuedAudios();
+          return;
+        }
 
         // ⛔ ne pas recharger pendant un envoi ou un enregistrement
         if (_sending || _isRecording) return;
@@ -164,6 +170,7 @@ class _ChatPageState extends State<ChatPage> {
 
         // ✅ succès → retirer de la queue
         _sendQueue.removeAt(0);
+        if (!mounted) return;
 
         // 🔄 mettre à jour le statut local
         setState(() {
@@ -229,6 +236,7 @@ class _ChatPageState extends State<ChatPage> {
 
       setState(() {
         _messages = msgs;
+        _offline = false; // ✅ retour connexion
         _loading = false;
       });
 
@@ -240,8 +248,9 @@ class _ChatPageState extends State<ChatPage> {
       }
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
-        _error = true;
+        _offline = true; // 🔔 SIGNAL OFFLINE
         _loading = false;
       });
     }
@@ -262,7 +271,7 @@ class _ChatPageState extends State<ChatPage> {
       "message": text,
       "sender_id": 0,
       "created_at": DateTime.now().toIso8601String(),
-      "time": "En attente…",
+      "time": _offline ? "En attente (hors ligne)" : "En attente…",
       "local_status": "pending",
     };
 
@@ -335,7 +344,7 @@ class _ChatPageState extends State<ChatPage> {
         "audio_duration": _recordDuration.inSeconds,
         "sender_id": 0,
         "created_at": DateTime.now().toIso8601String(),
-        "time": "En attente…",
+        "time": _offline ? "En attente (hors ligne)" : "En attente…",
         "local_status": "pending",
         "reply_to": _replyToMessage?['id'],
         "seen": 0,
@@ -427,6 +436,7 @@ class _ChatPageState extends State<ChatPage> {
         );
 
         _audioQueue.removeAt(0);
+        if (!mounted) return;
 
         setState(() {
           msg["local_status"] = "sent";
@@ -909,6 +919,11 @@ class _ChatPageState extends State<ChatPage> {
         titleSpacing: 0,
         title: _buildHeader(),
         actions: [
+          if (_offline)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Icon(Icons.cloud_off, color: Colors.white),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () => _load(scrollToEnd: false),
@@ -946,20 +961,25 @@ class _ChatPageState extends State<ChatPage> {
       body: Column(
         children: [
           _recordingOverlay(),
+          // 🔔 BANNIÈRE OFFLINE
+          if (_offline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              color: Colors.orange.shade200,
+              child: const Text(
+                "Hors connexion – messages en attente",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
           Expanded(
             child: Builder(
               builder: (_) {
                 if (_loading) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (_error) {
-                  return Center(
-                    child: ElevatedButton(
-                      onPressed: () => _load(initial: true),
-                      child: const Text("Réessayer"),
-                    ),
-                  );
-                }
+
                 return ListView.builder(
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.all(10),
