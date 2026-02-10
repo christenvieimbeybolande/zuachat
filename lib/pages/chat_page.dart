@@ -178,22 +178,6 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  void _scrollToBottom({bool animated = true}) {
-    if (!_scrollCtrl.hasClients) return;
-    if (!_userIsAtBottom()) return; // 🔥 ne pas forcer
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final pos = _scrollCtrl.position.maxScrollExtent;
-      animated
-          ? _scrollCtrl.animateTo(
-              pos,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            )
-          : _scrollCtrl.jumpTo(pos);
-    });
-  }
-
   void _queueMessage(Map<String, dynamic> msg) {
     _sendQueue.add(msg);
   }
@@ -290,7 +274,7 @@ class _ChatPageState extends State<ChatPage> {
       });
 
       if (scrollToEnd) {
-        _scrollToBottom(animated: false);
+        _smartScrollToBottom(animated: false);
       }
     } catch (_) {
       if (!mounted) return;
@@ -302,6 +286,39 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  /// 🔽 Scroll forcé (quand MOI j’envoie)
+  void _forceScrollToBottom({bool animated = true}) {
+    if (!_scrollCtrl.hasClients) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pos = _scrollCtrl.position.maxScrollExtent;
+      animated
+          ? _scrollCtrl.animateTo(
+              pos,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            )
+          : _scrollCtrl.jumpTo(pos);
+    });
+  }
+
+  /// 🔽 Scroll intelligent (quand message reçu / polling)
+  void _smartScrollToBottom({bool animated = true}) {
+    if (!_scrollCtrl.hasClients) return;
+    if (!_userIsAtBottom()) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pos = _scrollCtrl.position.maxScrollExtent;
+      animated
+          ? _scrollCtrl.animateTo(
+              pos,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            )
+          : _scrollCtrl.jumpTo(pos);
+    });
+  }
+
   // ============================================================
   // ✉️ Envoyer message
   // ============================================================
@@ -311,7 +328,6 @@ class _ChatPageState extends State<ChatPage> {
 
     _msgCtrl.clear();
 
-    // 1️⃣ Message LOCAL immédiat
     final Map<String, dynamic> localMsg = {
       "id": -DateTime.now().millisecondsSinceEpoch,
       "message": text,
@@ -320,17 +336,19 @@ class _ChatPageState extends State<ChatPage> {
       "time": _offline ? "En attente (hors ligne)" : "En attente…",
       "local_status": "pending",
     };
+
     setState(() {
       _messages.add(localMsg);
     });
 
-// 🔥 SCROLL CORRECT APRÈS RENDER
-    _scrollToBottom();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _forceScrollToBottom();
+    });
 
-    // 2️⃣ Ajouter dans la file d’attente locale
+    // 🔥 FORCER LE SCROLL
+    _forceScrollToBottom();
+
     _queueMessage(localMsg);
-
-    // 3️⃣ Lancer tentative d’envoi
     _trySendQueuedMessages();
   }
 
@@ -412,7 +430,7 @@ class _ChatPageState extends State<ChatPage> {
       _isPaused = false;
       _recordDuration = Duration.zero;
     });
-    _scrollToBottom();
+    _forceScrollToBottom();
   }
 
   void _scrollToMessage(int messageId) {

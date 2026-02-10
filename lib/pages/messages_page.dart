@@ -80,6 +80,7 @@ class _MessageListPageState extends State<MessageListPage> {
   // 🔕 Polling SILENCIEUX (basé sur last_msg_time)
   // ======================================================
   Future<void> _pollSilent() async {
+    if (_offline) return;
     try {
       final data = await apiFetchConversations();
       if (!mounted) return;
@@ -102,6 +103,20 @@ class _MessageListPageState extends State<MessageListPage> {
     } catch (_) {
       // silence total (offline)
     }
+  }
+
+  void _requireOnline(VoidCallback action) {
+    if (_offline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Connexion Internet requise pour démarrer une nouvelle discussion",
+          ),
+        ),
+      );
+      return;
+    }
+    action();
   }
 
   // ======================================================
@@ -163,6 +178,16 @@ class _MessageListPageState extends State<MessageListPage> {
   // 📱 Nouveau message (liste de contacts)
   // ======================================================
   Future<void> _openNewMessageModal() async {
+    if (_offline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Impossible de charger les contacts hors connexion",
+          ),
+        ),
+      );
+      return;
+    }
     try {
       final friends = await apiFetchFriendsForChat();
       if (!mounted) return;
@@ -298,8 +323,11 @@ class _MessageListPageState extends State<MessageListPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur de connexion. Veuillez réessayer."),
+        ),
+      );
     }
   }
 
@@ -314,12 +342,15 @@ class _MessageListPageState extends State<MessageListPage> {
         title: const Text("Messages", style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load)
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _offline ? null : _load,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: primary,
-        onPressed: _openNewMessageModal,
+        backgroundColor: _offline ? Colors.grey : primary,
+        onPressed: _offline ? null : () => _openNewMessageModal(),
         child: const Icon(Icons.edit),
       ),
       body: RefreshIndicator(

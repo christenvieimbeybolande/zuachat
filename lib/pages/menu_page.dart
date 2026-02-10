@@ -31,7 +31,7 @@ class MenuPage extends StatefulWidget {
 
 class _MenuPageState extends State<MenuPage> {
   bool _loading = true;
-  bool _error = false;
+  bool _offline = false;
 
   Map<String, dynamic>? _user;
   Map<String, dynamic>? _badgeRequest;
@@ -89,20 +89,21 @@ class _MenuPageState extends State<MenuPage> {
 
         setState(() {
           _user = user;
+          _badgeRequest = user['badge_request'];
           unreadMessages = unread['messages'] ?? 0;
           unreadNotifications = unread['notifications'] ?? 0;
-          _badgeRequest = user['badge_request'];
+          _offline = false;
           _loading = false;
         });
       } else {
-        _error = true;
-        _loading = false;
-        setState(() {});
+        setState(() => _loading = false);
       }
     } catch (_) {
-      _error = true;
-      _loading = false;
-      setState(() {});
+      if (!mounted) return;
+      setState(() {
+        _offline = true;
+        _loading = false;
+      });
     }
   }
 
@@ -121,20 +122,13 @@ class _MenuPageState extends State<MenuPage> {
       );
     }
 
-    if (_error || _user == null) {
-      return Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        body: Center(child: Text(t.error_loading_menu)),
-      );
-    }
-
-    final user = _user!;
+    final user = _user ?? {};
     final verified = user['badge_verified'] == 1;
     final badgeStatus = _badgeRequest?['status'];
 
-    final photo = (user['photo'] ??
-            'https://zuachat.istmbosobe.com/assets/default-avatar.png')
-        .toString();
+    final photo =
+        (user['photo'] ?? 'https://zuachat.com/assets/default-avatar.png')
+            .toString();
 
     final fullName = "${user['prenom'] ?? ''} ${user['nom'] ?? ''}".trim();
 
@@ -154,7 +148,9 @@ class _MenuPageState extends State<MenuPage> {
           title: Text(
             t.menu,
             style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold),
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           iconTheme: const IconThemeData(color: Colors.white),
         ),
@@ -164,25 +160,38 @@ class _MenuPageState extends State<MenuPage> {
           child: ListView(
             padding: const EdgeInsets.all(14),
             children: [
-              // ================= PROFILE =================
+              if (_offline)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  color: Colors.orange.shade200,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.wifi_off, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        "Hors connexion – certaines sections nécessitent Internet",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
               _profileCard(theme, photo, fullName, user['username']),
-
               const SizedBox(height: 16),
-
               _menuItem(Icons.home, t.home, () {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (_) => const FeedPage()),
                 );
               }),
-
               _menuItem(Icons.group, t.friends, () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FriendsPage()),
-                );
+                _requireOnline(() {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FriendsPage()),
+                  );
+                });
               }),
-
               _menuItem(Icons.video_collection, t.reels, () {
                 Navigator.push(
                   context,
@@ -191,28 +200,29 @@ class _MenuPageState extends State<MenuPage> {
                   ),
                 );
               }),
-
               _menuItem(Icons.notifications, t.notifications, () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NotificationsPage()),
-                );
+                _requireOnline(() {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const NotificationsPage()),
+                  );
+                });
               }),
-
               _menuItem(Icons.bookmark, t.saved, () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SavedPage()),
                 );
               }),
-
               _menuItem(Icons.bar_chart, t.dashboard, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const DashboardPage()),
-                );
+                _requireOnline(() {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DashboardPage()),
+                  );
+                });
               }),
-
               _menuItem(
                 Icons.verified,
                 t.verify,
@@ -234,30 +244,25 @@ class _MenuPageState extends State<MenuPage> {
                             ? Colors.red
                             : Colors.blue,
               ),
-
               _menuItem(Icons.settings, t.settings, () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SettingsPage()),
                 );
               }),
-
               _menuItem(Icons.help_outline, t.help, () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const HelpPage()),
                 );
               }),
-
               const SizedBox(height: 16),
-
               _menuItem(Icons.support_agent, t.support_center, () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const HelpsPage()),
                 );
               }),
-
               _menuItem(Icons.logout, t.logout, () async {
                 await apiLogout();
                 if (!mounted) return;
@@ -280,8 +285,16 @@ class _MenuPageState extends State<MenuPage> {
   }
 
   // ============================================================
-  // WIDGETS
+  // HELPERS
   // ============================================================
+  void _requireOnline(VoidCallback action) {
+    if (_offline) {
+      _snack("Connexion Internet requise pour cette section");
+      return;
+    }
+    action();
+  }
+
   Widget _profileCard(
     ThemeData theme,
     String photo,
@@ -307,9 +320,8 @@ class _MenuPageState extends State<MenuPage> {
               children: [
                 Text(
                   name.isNotEmpty ? name : '—',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(username ?? '—', style: theme.textTheme.bodySmall),
               ],
@@ -349,8 +361,6 @@ class _MenuPageState extends State<MenuPage> {
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
