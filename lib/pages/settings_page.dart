@@ -9,6 +9,7 @@ import '../api/client.dart';
 import '../theme/theme_controller.dart';
 
 import '../gen_l10n/app_localizations.dart';
+import 'manage_services_page.dart';
 
 import 'edit_profile_page.dart';
 import 'notifications_page.dart';
@@ -182,6 +183,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 30),
           _sectionTitle(t.account),
+          _tile(
+            icon: Icons.apps_outlined,
+            label: 'Gérer mon accès ZuaChat',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ManageServicesPage(),
+                ),
+              );
+            },
+          ),
           _tile(
             icon: Icons.logout,
             label: t.logout,

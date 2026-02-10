@@ -210,10 +210,12 @@ class _MenuPageState extends State<MenuPage> {
                 });
               }),
               _menuItem(Icons.bookmark, t.saved, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SavedPage()),
-                );
+                _requireOnline(() {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SavedPage()),
+                  );
+                });
               }),
               _menuItem(Icons.bar_chart, t.dashboard, () {
                 _requireOnline(() {

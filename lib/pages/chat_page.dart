@@ -1103,7 +1103,7 @@ class _ChatPageState extends State<ChatPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.delete, color: Color.fromARGB(255, 117, 67, 67)),
+            icon: const Icon(Icons.delete, color: Colors.white),
             onPressed: _cancelRecording,
           ),
           Text(
