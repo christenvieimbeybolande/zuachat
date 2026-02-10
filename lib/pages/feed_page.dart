@@ -41,12 +41,12 @@ class _FeedPageState extends State<FeedPage>
   Map<String, dynamic>? _data;
 
   bool _loading = true;
-  bool _error = false;
   bool _refreshing = false;
   bool _isLoadingMore = false;
   int unreadNotifications = 0;
   int unreadMessages = 0;
   Timer? _pollingTimer;
+  bool _offline = false;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -66,32 +66,31 @@ class _FeedPageState extends State<FeedPage>
 
   static const primaryColor = Color(0xFFFF0000);
 
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-  _animCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 350),
-  );
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
 
-  _scrollController.addListener(_handleScroll);
-  _checkAuthState();
+    _scrollController.addListener(_handleScroll);
+    _checkAuthState();
 
-  // 🔁 POLLING FEED (compteurs seulement)
-  _pollingTimer = Timer.periodic(
-    const Duration(seconds: 10),
-    (_) {
-      if (!mounted) return;
-      _pollCountsOnly();
-    },
-  );
-}
-
+    // 🔁 POLLING FEED (compteurs seulement)
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) {
+        if (!mounted) return;
+        _pollCountsOnly();
+      },
+    );
+  }
 
   @override
   void dispose() {
-      _pollingTimer?.cancel(); // ✅ OBLIGATOIRE
+    _pollingTimer?.cancel(); // ✅ OBLIGATOIRE
     _animCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -148,8 +147,8 @@ void initState() {
       setState(() {
         _data = res;
         _loading = false;
-        _error = false;
         _refreshing = false;
+        _offline = false;
 
         unreadNotifications = res['unread_notifications'] ?? 0;
         unreadMessages = res['unread_messages'] ?? 0;
@@ -160,6 +159,11 @@ void initState() {
 
         _publications.addAll(ranked);
       });
+
+// ✅ AJOUT ICI
+      if (_offline) {
+        setState(() => _offline = false);
+      }
 
       _animCtrl.forward(from: 0.0);
 
@@ -172,16 +176,18 @@ void initState() {
         });
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        _error = true;
+        _offline = true; // 🔔 PAS DE CONNEXION
         _loading = false;
         _refreshing = false;
       });
 
-      // 🔁 Retry silencieux (iOS-friendly)
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          _load(reset: true);
+      // 🔁 retry silencieux (sans UI bloquante)
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted && _offline) {
+          _load(reset: false);
         }
       });
     }
@@ -192,6 +198,10 @@ void initState() {
       final res = await fetchHomeFeed(page: 1, limit: 1);
 
       if (res['ok'] == true && mounted) {
+        if (_offline) {
+          setState(() => _offline = false);
+        }
+
         setState(() {
           unreadMessages = res['unread_messages'] ?? unreadMessages;
           unreadNotifications =
@@ -378,25 +388,6 @@ void initState() {
       );
     }
 
-    if (_error) {
-      return Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ZuaLoaderMini(),
-              SizedBox(height: 12),
-              Text(
-                "Connexion en cours…",
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     final d = _data ?? {};
 
     final user = d['user'] ?? {};
@@ -534,6 +525,23 @@ void initState() {
                 );
               },
             ),
+            if (_offline)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                color: Colors.orange.shade200,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.wifi_off, size: 14),
+                    SizedBox(width: 6),
+                    Text(
+                      "Hors connexion – le feed se synchronisera automatiquement",
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
 
             // 🔥 Le reste du feed
             Expanded(

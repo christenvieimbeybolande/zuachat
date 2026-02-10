@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:vibration/vibration.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
@@ -43,6 +44,12 @@ class _ChatPageState extends State<ChatPage> {
 
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  bool _userIsAtBottom() {
+    if (!_scrollCtrl.hasClients) return true;
+    final pos = _scrollCtrl.position;
+    return pos.maxScrollExtent - pos.pixels < 80;
+  }
+
   // =========================
   // 🎙️ AUDIO STATE
   // =========================
@@ -57,6 +64,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isLocked = false;
   bool _isPaused = false;
   bool _isBlocked = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   Duration _recordDuration = Duration.zero;
   Timer? _recordTimer;
@@ -143,6 +151,47 @@ class _ChatPageState extends State<ChatPage> {
         _trySendQueuedAudios(); // audio ✅
       },
     );
+    // 📡 ÉCOUTE CONNEXION RÉSEAU (AUTO SYNC)
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final hasConnection =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+
+      if (hasConnection && _offline) {
+        if (!mounted) return;
+
+        setState(() {
+          _offline = false;
+        });
+
+        _load(scrollToEnd: false);
+        _trySendQueuedMessages();
+        _trySendQueuedAudios();
+      }
+
+      if (!hasConnection && !_offline) {
+        if (!mounted) return;
+
+        setState(() {
+          _offline = true;
+        });
+      }
+    });
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    if (!_scrollCtrl.hasClients) return;
+    if (!_userIsAtBottom()) return; // 🔥 ne pas forcer
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pos = _scrollCtrl.position.maxScrollExtent;
+      animated
+          ? _scrollCtrl.animateTo(
+              pos,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            )
+          : _scrollCtrl.jumpTo(pos);
+    });
   }
 
   void _queueMessage(Map<String, dynamic> msg) {
@@ -188,6 +237,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _connectivitySub?.cancel(); // ✅ AJOUT OBLIGATOIRE
     _pollingTimer?.cancel(); // ✅ AJOUT OBLIGATOIRE
     _recordTimer?.cancel();
     _recorder.dispose();
@@ -236,15 +286,11 @@ class _ChatPageState extends State<ChatPage> {
 
       setState(() {
         _messages = msgs;
-        _offline = false; // ✅ retour connexion
         _loading = false;
       });
 
       if (scrollToEnd) {
-        await Future.delayed(const Duration(milliseconds: 80));
-        if (_scrollCtrl.hasClients) {
-          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-        }
+        _scrollToBottom(animated: false);
       }
     } catch (_) {
       if (!mounted) return;
@@ -274,12 +320,12 @@ class _ChatPageState extends State<ChatPage> {
       "time": _offline ? "En attente (hors ligne)" : "En attente…",
       "local_status": "pending",
     };
-
     setState(() {
       _messages.add(localMsg);
     });
 
-    _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+// 🔥 SCROLL CORRECT APRÈS RENDER
+    _scrollToBottom();
 
     // 2️⃣ Ajouter dans la file d’attente locale
     _queueMessage(localMsg);
@@ -366,10 +412,7 @@ class _ChatPageState extends State<ChatPage> {
       _isPaused = false;
       _recordDuration = Duration.zero;
     });
-    await Future.delayed(const Duration(milliseconds: 50));
-    if (_scrollCtrl.hasClients) {
-      _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-    }
+    _scrollToBottom();
   }
 
   void _scrollToMessage(int messageId) {
@@ -913,6 +956,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: primary,

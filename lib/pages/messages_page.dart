@@ -52,6 +52,7 @@ class _MessageListPageState extends State<MessageListPage> {
   bool _loading = true;
   bool _error = false;
   List<Map<String, dynamic>> _conversations = [];
+  bool _offline = false;
 
   @override
   void initState() {
@@ -83,20 +84,23 @@ class _MessageListPageState extends State<MessageListPage> {
       final data = await apiFetchConversations();
       if (!mounted) return;
 
+      if (_offline) {
+        setState(() => _offline = false); // ✅ connexion revenue
+      }
+
       final oldTime = _conversations.isNotEmpty
           ? _conversations.first['last_msg_time']
           : null;
 
       final newTime = data.isNotEmpty ? data.first['last_msg_time'] : null;
 
-      // 🔥 Mise à jour UNIQUEMENT s’il y a un nouveau message
       if (oldTime != newTime) {
         setState(() {
           _conversations = data;
         });
       }
     } catch (_) {
-      // silence total (pas d'UI impactée)
+      // silence total (offline)
     }
   }
 
@@ -120,7 +124,7 @@ class _MessageListPageState extends State<MessageListPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = true;
+        _offline = true;
         _loading = false;
       });
     }
@@ -331,12 +335,25 @@ class _MessageListPageState extends State<MessageListPage> {
             }
 
             // ❌ Erreur
-            if (_error) {
+            if (_offline) {
               return Center(
-                child: ElevatedButton.icon(
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text("Réessayer"),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                    SizedBox(height: 12),
+                    Text(
+                      "Hors connexion",
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      "Vérifiez votre connexion Internet.\nLes messages se mettront à jour automatiquement.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
                 ),
               );
             }

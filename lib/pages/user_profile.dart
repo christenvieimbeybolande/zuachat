@@ -336,10 +336,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     final avatar =
         user['photo'] ?? "https://zuachat.com/assets/default-avatar.png";
+    final prenom = (user['prenom'] ?? '').toString().trim();
+    final nomFamille = (user['nom'] ?? '').toString().trim(); // OBLIGATOIRE
+    final postnom = (user['postnom'] ?? '').toString().trim(); // FACULTATIF
 
     final nom = (user['type_compte'] == "professionnel")
-        ? user['nom']
-        : "${user['prenom']} ${user['nom']} ${user['postnom']}".trim();
+        ? nomFamille
+        : [
+            prenom,
+            nomFamille,
+            if (postnom.isNotEmpty) postnom,
+          ].join(' ');
 
     final username = user['username'] ?? "";
 
@@ -600,9 +607,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                           MaterialPageRoute(
                                             builder: (_) => ChatPage(
                                               contactId: widget.userId,
-                                              contactName:
-                                                  "${user['prenom']} ${user['postnom']} ${user['nom']}"
-                                                      .trim(),
+                                              contactName: [
+                                                prenom,
+                                                nomFamille,
+                                                if (postnom.isNotEmpty) postnom,
+                                              ].join(' '),
                                               contactPhoto: user['photo'] ?? "",
                                               badgeVerified:
                                                   user['badge_verified'] == 1,
