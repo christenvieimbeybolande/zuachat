@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:async';
 
 import '../gen_l10n/app_localizations.dart';
 
@@ -32,6 +34,8 @@ class _FriendsPageState extends State<FriendsPage> {
 
   int unreadNotifications = 0;
   int unreadMessages = 0;
+  bool _offline = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   bool showSearch = false;
   String filter = "all";
@@ -42,6 +46,29 @@ class _FriendsPageState extends State<FriendsPage> {
     super.initState();
     _loadCurrentUser();
     _loadCounters();
+
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final hasConnection =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+
+      if (!mounted) return;
+
+      setState(() {
+        _offline = !hasConnection;
+      });
+
+      // 🔁 Recharge automatique quand Internet revient
+      if (hasConnection) {
+        _loadFriends();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    searchCtrl.dispose();
+    super.dispose();
   }
 
   // ===================== UTIL =====================
@@ -78,13 +105,35 @@ class _FriendsPageState extends State<FriendsPage> {
     } catch (_) {}
   }
 
+  void _requireOnline(VoidCallback action) {
+    if (_offline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Connexion Internet requise"),
+        ),
+      );
+      return;
+    }
+    action();
+  }
+
   Future<void> _loadCurrentUser() async {
     final prefs = await SharedPreferences.getInstance();
     currentUserId = int.tryParse(prefs.getString('user_id') ?? "0");
-    _loadFriends();
+
+    if (!_offline) {
+      _loadFriends();
+    } else {
+      setState(() => loading = false);
+    }
   }
 
   Future<void> _loadFriends() async {
+    if (_offline) {
+      setState(() => loading = false);
+      return;
+    }
+
     setState(() => loading = true);
 
     final res = await fetchFriendsData();
@@ -113,6 +162,15 @@ class _FriendsPageState extends State<FriendsPage> {
   }
 
   void _openProfile(BuildContext context, int userId) {
+    if (_offline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Connexion Internet requise"),
+        ),
+      );
+      return;
+    }
+
     if (currentUserId == userId) {
       Navigator.push(
         context,
@@ -222,6 +280,17 @@ class _FriendsPageState extends State<FriendsPage> {
               )
             : Column(
                 children: [
+                  if (_offline)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      color: Colors.orange.shade200,
+                      child: const Text(
+                        "Hors connexion – certaines actions sont indisponibles",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 10),
+                      ),
+                    ),
                   if (showSearch)
                     Padding(
                       padding: const EdgeInsets.all(12),
@@ -254,7 +323,17 @@ class _FriendsPageState extends State<FriendsPage> {
                   Expanded(
                     child: RefreshIndicator(
                       color: primary,
-                      onRefresh: _loadFriends,
+                      onRefresh: () async {
+                        if (_offline) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Connexion Internet requise"),
+                            ),
+                          );
+                          return;
+                        }
+                        await _loadFriends();
+                      },
                       child: ListView(
                         padding: const EdgeInsets.all(8),
                         children: _buildFilteredContent(context, filtered, t),
@@ -364,7 +443,11 @@ class _FriendsPageState extends State<FriendsPage> {
           style: theme.textTheme.bodySmall,
         ),
         trailing: ElevatedButton(
-          onPressed: () => isFollowing ? _unfollow(userId) : _follow(userId),
+          onPressed: () {
+            _requireOnline(() {
+              isFollowing ? _unfollow(userId) : _follow(userId);
+            });
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: isFollowing ? theme.dividerColor : primary,
             foregroundColor:

@@ -170,8 +170,8 @@ class _MenuPageState extends State<MenuPage> {
                       Icon(Icons.wifi_off, size: 14),
                       SizedBox(width: 6),
                       Text(
-                        "Hors connexion – certaines sections nécessitent Internet",
-                        style: TextStyle(fontSize: 12),
+                        "Hors connexion, certaines sections nécessitent Internet",
+                        style: TextStyle(fontSize: 10),
                       ),
                     ],
                   ),
@@ -227,14 +227,17 @@ class _MenuPageState extends State<MenuPage> {
                 Icons.verified,
                 t.verify,
                 () {
-                  if (verified) {
-                    _snack(t.already_verified);
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ZuaVerifiePage()),
-                    );
-                  }
+                  _requireOnline(() {
+                    if (verified) {
+                      _snack(t.already_verified);
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ZuaVerifiePage()),
+                      );
+                    }
+                  });
                 },
                 color: verified
                     ? Colors.green

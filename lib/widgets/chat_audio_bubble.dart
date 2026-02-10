@@ -12,8 +12,9 @@ class ChatAudioBubble extends StatefulWidget {
   final String url;
   final int duration;
   final String time;
+  final bool seen;
+  final Color primaryColor; // ✅ AJOUT
   final String? avatarUrl;
-  final bool seen; // ✅ AJOUT
   final Widget? replyPreview;
 
   const ChatAudioBubble({
@@ -22,7 +23,8 @@ class ChatAudioBubble extends StatefulWidget {
     required this.url,
     required this.duration,
     required this.time,
-    required this.seen, // ✅ AJOUT
+    required this.seen,
+    required this.primaryColor, // ✅
     this.avatarUrl,
     this.replyPreview,
   });
@@ -145,7 +147,10 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
         total.inMilliseconds > 0 ? total.inMilliseconds.toDouble() : 1.0;
 
     final isMe = widget.isMe;
-    final fg = isMe ? Colors.white : Colors.black54;
+    final bgColor =
+        widget.isMe ? widget.primaryColor : Theme.of(context).cardColor;
+
+    final fg = widget.isMe ? Colors.white : Colors.black54;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -158,7 +163,7 @@ class _ChatAudioBubbleState extends State<ChatAudioBubble>
             constraints: const BoxConstraints(maxWidth: 230),
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             decoration: BoxDecoration(
-              color: isMe ? Colors.red : Theme.of(context).cardColor,
+              color: bgColor,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(

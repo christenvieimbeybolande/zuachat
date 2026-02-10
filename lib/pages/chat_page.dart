@@ -61,6 +61,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _sendingAudioQueue = false;
 
   bool _isRecording = false;
+  bool _initialScrollDone = false;
+
   bool _isLocked = false;
   bool _isPaused = false;
   bool _isBlocked = false;
@@ -272,9 +274,15 @@ class _ChatPageState extends State<ChatPage> {
         _messages = msgs;
         _loading = false;
       });
-
       if (scrollToEnd) {
-        _smartScrollToBottom(animated: false);
+        if (!_initialScrollDone) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _forceScrollToBottom(animated: false);
+            _initialScrollDone = true;
+          });
+        } else {
+          _smartScrollToBottom(animated: false);
+        }
       }
     } catch (_) {
       if (!mounted) return;
@@ -782,7 +790,8 @@ class _ChatPageState extends State<ChatPage> {
             url: audioUrl,
             duration: int.tryParse('${m['audio_duration']}') ?? 0,
             time: m['time'] ?? '',
-            seen: m['seen'] == 1, // ✅ LIGNE CLÉ
+            seen: m['seen'] == 1,
+            primaryColor: primary, // 🔥 MÊME ROUGE
             avatarUrl: isMe ? null : widget.contactPhoto,
             replyPreview: _replyPreviewBubble(m),
           ),
@@ -1030,7 +1039,7 @@ class _ChatPageState extends State<ChatPage> {
               padding: const EdgeInsets.symmetric(vertical: 6),
               color: Colors.orange.shade200,
               child: const Text(
-                "Hors connexion – messages en attente",
+                "Hors connexion, messages en attente",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12),
               ),
@@ -1089,12 +1098,12 @@ class _ChatPageState extends State<ChatPage> {
     if (!_isRecording) return const SizedBox.shrink();
 
     return Container(
-      color: Colors.black87,
+      color: primary.withOpacity(0.95),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
+            icon: const Icon(Icons.delete, color: Color.fromARGB(255, 117, 67, 67)),
             onPressed: _cancelRecording,
           ),
           Text(

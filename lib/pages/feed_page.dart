@@ -536,8 +536,8 @@ class _FeedPageState extends State<FeedPage>
                     Icon(Icons.wifi_off, size: 14),
                     SizedBox(width: 6),
                     Text(
-                      "Hors connexion – le feed se synchronisera automatiquement",
-                      style: TextStyle(fontSize: 12),
+                      "Hors connexion, l'accueil se synchronisera automatiquement",
+                      style: TextStyle(fontSize: 8),
                     ),
                   ],
                 ),
