@@ -7,6 +7,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:vibration/vibration.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:video_player/video_player.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
@@ -19,6 +22,11 @@ import '../api/unblock_user.dart';
 
 import '../widgets/chat_audio_bubble.dart';
 import '../pages/user_profile.dart';
+
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+
+import '../api/send_file_message.dart';
 
 class ChatPage extends StatefulWidget {
   final int contactId;
@@ -53,10 +61,11 @@ class _ChatPageState extends State<ChatPage> {
   // =========================
   // 🎙️ AUDIO STATE
   // =========================
+
   final AudioRecorder _recorder = AudioRecorder();
   Map<String, dynamic>? _replyToMessage;
   int? _highlightedMessageId;
-
+  final ImagePicker _imagePicker = ImagePicker();
   final List<Map<String, dynamic>> _audioQueue = [];
   bool _sendingAudioQueue = false;
 
@@ -184,6 +193,98 @@ class _ChatPageState extends State<ChatPage> {
     _sendQueue.add(msg);
   }
 
+  Future<void> _pickImage() async {
+    final XFile? img =
+        await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (img == null) return;
+
+    await apiSendFileMessage(
+      receiverId: widget.contactId,
+      type: 'image',
+      file: File(img.path),
+      replyTo: _replyToMessage?['id'],
+    );
+
+    setState(() => _replyToMessage = null);
+  }
+
+  Future<void> _pickVideo() async {
+    final XFile? vid =
+        await _imagePicker.pickVideo(source: ImageSource.gallery);
+    if (vid == null) return;
+
+    await apiSendFileMessage(
+      receiverId: widget.contactId,
+      type: 'video',
+      file: File(vid.path),
+      replyTo: _replyToMessage?['id'],
+    );
+
+    setState(() => _replyToMessage = null);
+  }
+
+  Future<void> _pickDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    await apiSendFileMessage(
+      receiverId: widget.contactId,
+      type: 'document',
+      file: File(result.files.single.path!),
+      replyTo: _replyToMessage?['id'],
+    );
+
+    setState(() => _replyToMessage = null);
+  }
+
+  void _openAttachMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: const Text("Image"),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam),
+              title: const Text("Vidéo"),
+              onTap: () {
+                Navigator.pop(context);
+                _pickVideo();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file),
+              title: const Text("Document"),
+              onTap: () {
+                Navigator.pop(context);
+                _pickDocument();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.contacts),
+              title: const Text("Contact"),
+              onTap: () {
+                Navigator.pop(context);
+                _sendContact();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _trySendQueuedMessages() async {
     if (_sendingQueue) return;
     _sendingQueue = true;
@@ -230,6 +331,29 @@ class _ChatPageState extends State<ChatPage> {
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendContact() async {
+    // 🔹 Exemple simple (plus tard tu peux ouvrir le carnet)
+    const name = "Jean Dupont";
+    const phone = "+243810000000";
+
+    final vcard = '''
+BEGIN:VCARD
+VERSION:3.0
+FN:$name
+TEL:$phone
+END:VCARD
+''';
+
+    await apiSendChatMessage(
+      receiverId: widget.contactId,
+      message: vcard,
+      type: 'contact',
+      replyTo: _replyToMessage?['id'],
+    );
+
+    setState(() => _replyToMessage = null);
   }
 
   Future<void> _checkBlocked() async {
@@ -547,7 +671,7 @@ class _ChatPageState extends State<ChatPage> {
                   Navigator.pop(context);
                 },
               ),
-// 🚨 SIGNALER MESSAGE (APPLE 1.2)
+            // 🚨 SIGNALER MESSAGE (APPLE 1.2)
             ListTile(
               leading: const Icon(Icons.flag, color: Colors.orange),
               title: const Text("Signaler ce message"),
@@ -627,6 +751,23 @@ class _ChatPageState extends State<ChatPage> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12),
+        ),
+      ),
+    );
+  }
+
+  void _openImageViewer(String url) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(backgroundColor: Colors.black),
+          body: Center(
+            child: InteractiveViewer(
+              child: Image.network(url),
+            ),
+          ),
         ),
       ),
     );
@@ -794,6 +935,266 @@ class _ChatPageState extends State<ChatPage> {
             primaryColor: primary, // 🔥 MÊME ROUGE
             avatarUrl: isMe ? null : widget.contactPhoto,
             replyPreview: _replyPreviewBubble(m),
+          ),
+        ),
+      );
+    }
+// 🖼️ IMAGE
+    if (m['type'] == 'image') {
+      final url = _fileUrl(m['file_path']);
+
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: false,
+        ),
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                _replyPreviewBubble(m),
+                GestureDetector(
+                  onTap: () => _openImageViewer(url),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      url,
+                      width: 220,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, right: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        m['time'] ?? '',
+                        style: TextStyle(fontSize: 9, color: timeColor),
+                      ),
+                      const SizedBox(width: 4),
+                      _seenIcon(m, isMe),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+// 🎥 VIDEO
+    if (m['type'] == 'video') {
+      final url = _fileUrl(m['file_path']);
+
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: false,
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VideoPlayerPage(url: url),
+            ),
+          );
+        },
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            width: 220,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                const Icon(
+                  Icons.play_circle_fill,
+                  size: 60,
+                  color: Colors.white70,
+                ),
+                Positioned(
+                  bottom: 6,
+                  right: 8,
+                  child: Row(
+                    children: [
+                      Text(
+                        m['time'] ?? '',
+                        style: TextStyle(fontSize: 9, color: timeColor),
+                      ),
+                      const SizedBox(width: 4),
+                      _seenIcon(m, isMe),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+// 📇 CONTACT
+    if (m['type'] == 'contact') {
+      final raw = m['message'] ?? '';
+
+      String name = 'Contact';
+      String phone = '';
+
+      for (final line in raw.split('\n')) {
+        if (line.startsWith('FN:')) {
+          name = line.replaceFirst('FN:', '').trim();
+        }
+        if (line.startsWith('TEL:')) {
+          phone = line.replaceFirst('TEL:', '').trim();
+        }
+      }
+
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: false,
+        ),
+        onTap: () async {
+          final uri = Uri.parse('tel:$phone');
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri);
+          }
+        },
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.account_circle, size: 40),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        phone,
+                        style: TextStyle(fontSize: 12, color: timeColor),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  children: [
+                    Text(
+                      m['time'] ?? '',
+                      style: TextStyle(fontSize: 9, color: timeColor),
+                    ),
+                    _seenIcon(m, isMe),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+// 📄 DOCUMENT
+    if (m['type'] == 'document') {
+      final url = _fileUrl(m['file_path']);
+      final name = m['file_name'] ?? 'Document';
+      final size = _formatFileSize(m['file_size']);
+
+      return GestureDetector(
+        onLongPress: () => _openOptions(
+          msg: m,
+          isMe: isMe,
+          isAudio: false,
+        ),
+        onTap: () => _openDocument(url),
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.insert_drive_file, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: textColor),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        size,
+                        style: TextStyle(fontSize: 11, color: timeColor),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  children: [
+                    Text(
+                      m['time'] ?? '',
+                      style: TextStyle(fontSize: 9, color: timeColor),
+                    ),
+                    _seenIcon(m, isMe),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -1172,6 +1573,10 @@ class _ChatPageState extends State<ChatPage> {
         color: Theme.of(context).cardColor,
         child: Row(
           children: [
+            IconButton(
+              icon: const Icon(Icons.attach_file),
+              onPressed: _openAttachMenu,
+            ),
             Expanded(
               child: TextField(
                 controller: _msgCtrl,
@@ -1193,6 +1598,11 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
             ),
+            if (_msgCtrl.text.trim().isEmpty)
+              IconButton(
+                icon: const Icon(Icons.photo),
+                onPressed: _pickImage,
+              ),
             const SizedBox(width: 8),
             CircleAvatar(
               backgroundColor: _isRecording ? Colors.red : primary,
@@ -1231,5 +1641,69 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ),
     );
+  }
+
+  String _fileUrl(String path) {
+    if (path.startsWith('http')) return path;
+    return 'https://zuachat.com/$path';
+  }
+
+  String _formatFileSize(int? size) {
+    if (size == null) return '';
+    if (size < 1024) return '$size o';
+    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} Ko';
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} Mo';
+  }
+}
+
+class VideoPlayerPage extends StatefulWidget {
+  final String url;
+  const VideoPlayerPage({super.key, required this.url});
+
+  @override
+  State<VideoPlayerPage> createState() => _VideoPlayerPageState();
+}
+
+class _VideoPlayerPageState extends State<VideoPlayerPage> {
+  late VideoPlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.network(widget.url)
+      ..initialize().then((_) {
+        setState(() {});
+        _controller.play();
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black),
+      body: Center(
+        child: _controller.value.isInitialized
+            ? AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              )
+            : const CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
+Future<void> _openDocument(String url) async {
+  final uri = Uri.parse(url);
+
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

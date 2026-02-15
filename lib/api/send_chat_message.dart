@@ -5,6 +5,7 @@ import 'client.dart';
 Future<void> apiSendChatMessage({
   required int receiverId,
   required String message,
+  String type = 'text', // ✅ AJOUT
   int? replyTo, // ✅ NOUVEAU (réponse à un message)
 }) async {
   final dio = await ApiClient.authed();
