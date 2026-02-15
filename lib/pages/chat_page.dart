@@ -284,7 +284,7 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.music_note, size: 36),
+              leading: const Icon(Icons.audiotrack),
               title: const Text("Audio (MP3)"),
               onTap: () {
                 Navigator.pop(context);
@@ -564,7 +564,7 @@ END:VCARD
       final Map<String, dynamic> localAudioMsg = {
         "id": -DateTime.now().millisecondsSinceEpoch,
         "type": "voice",
-        "audio_path": _recordPath!,
+        "file_path": _recordPath!,
         "audio_duration": _recordDuration.inSeconds,
         "sender_id": 0,
         "created_at": DateTime.now().toIso8601String(),
@@ -651,7 +651,7 @@ END:VCARD
       try {
         await apiSendAudioMessage(
           receiverId: widget.contactId,
-          filePath: msg["audio_path"],
+          filePath: msg["file_path"],
           duration: msg["audio_duration"],
           replyTo: msg["reply_to"],
         );
@@ -921,7 +921,7 @@ END:VCARD
 
     // 🔊 AUDIO
     if (m['type'] == 'voice') {
-      String rawPath = m['audio_path'].toString().trim();
+      String rawPath = m['file_path'].toString().trim();
       rawPath = rawPath
           .replaceAll(RegExp(r'(?<!:)//'), '/')
           .replaceAll('audios/audios', 'audios')

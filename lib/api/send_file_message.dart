@@ -3,23 +3,29 @@ import 'package:dio/dio.dart';
 import 'client.dart';
 
 /// Types autorisés côté serveur
-/// image | video | document | contact
+/// image | video | document | audio_file | contact
 Future<void> apiSendFileMessage({
   required int receiverId,
   required String type,
-  
-  File? file, // image | video | document
-  Map<String, dynamic>? contactData, // contact (JSON)
+  File? file, // image | video | document | audio_file
+  Map<String, dynamic>? contactData, // contact (JSON ou vCard)
 
   String? message,
   int? replyTo,
 }) async {
   final dio = await ApiClient.authed();
 
-  // 🔒 sécurité côté client (double protection)
-  const allowedTypes = ['image', 'video', 'document', 'contact'];
+  // 🔒 Sécurité côté client (double protection)
+  const allowedTypes = [
+    'image',
+    'video',
+    'document',
+    'audio_file',
+    'contact',
+  ];
+
   if (!allowedTypes.contains(type)) {
-    throw Exception("Type de fichier non autorisé");
+    throw Exception("Type de fichier non autorisé : $type");
   }
 
   final formData = FormData();
@@ -32,11 +38,15 @@ Future<void> apiSendFileMessage({
     ..add(MapEntry('type', type));
 
   if (message != null && message.trim().isNotEmpty) {
-    formData.fields.add(MapEntry('message', message.trim()));
+    formData.fields.add(
+      MapEntry('message', message.trim()),
+    );
   }
 
   if (replyTo != null) {
-    formData.fields.add(MapEntry('reply_to', replyTo.toString()));
+    formData.fields.add(
+      MapEntry('reply_to', replyTo.toString()),
+    );
   }
 
   // =====================================================
@@ -53,7 +63,7 @@ Future<void> apiSendFileMessage({
   }
 
   // =====================================================
-  // 📎 FICHIER (IMAGE / VIDEO / DOCUMENT)
+  // 📎 FICHIER (IMAGE / VIDEO / DOCUMENT / AUDIO_FILE)
   // =====================================================
   if (type != 'contact') {
     if (file == null) {
@@ -79,7 +89,10 @@ Future<void> apiSendFileMessage({
   final res = await dio.post(
     '/send_message_with_file.php',
     data: formData,
-    options: Options(contentType: 'multipart/form-data'),
+    options: Options(
+      contentType: 'multipart/form-data',
+      responseType: ResponseType.json,
+    ),
   );
 
   final data = res.data;
