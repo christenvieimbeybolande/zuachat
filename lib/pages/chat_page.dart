@@ -10,6 +10,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../widgets/chat_audio_file_bubble.dart';
+
 
 import '../api/chat_messages.dart';
 import '../api/send_chat_message.dart';
@@ -1166,66 +1168,19 @@ END:VCARD
       );
     }
 // 🎵 AUDIO FILE (MP3)
-    if (m['type'] == 'audio_file') {
-      final url = _fileUrl(m['file_path']);
-      final name = m['file_name'] ?? 'Audio';
-      final size = _formatFileSize(m['file_size']);
+if (m['type'] == 'audio_file') {
+  final url = _fileUrl(m['file_path']);
 
-      return GestureDetector(
-        onLongPress: () => _openOptions(
-          msg: m,
-          isMe: isMe,
-          isAudio: false, // ✅ audio_file ≠ voice
-        ),
-        onTap: () => _openDocument(url),
-        child: Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.audiotrack, size: 36),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: textColor),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        size,
-                        style: TextStyle(fontSize: 11, color: timeColor),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  children: [
-                    Text(
-                      m['time'] ?? '',
-                      style: TextStyle(fontSize: 9, color: timeColor),
-                    ),
-                    _seenIcon(m, isMe),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+  return ChatAudioFileBubble(
+    url: url,
+    fileName: m['file_name'] ?? 'Audio',
+    fileSize: m['file_size'],
+    isMe: isMe,
+    time: m['time'] ?? '',
+    primaryColor: primary,
+  );
+}
+
 
 // 📄 DOCUMENT
     if (m['type'] == 'document') {
